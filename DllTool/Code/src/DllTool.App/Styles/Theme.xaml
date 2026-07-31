@@ -1,0 +1,188 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============================================================
+         全局配色：靛蓝品牌 + 浅灰工作区 + 状态色体系
+         ============================================================ -->
+    <SolidColorBrush x:Key="AppBackgroundBrush" Color="#EEF1F6"/>
+    <SolidColorBrush x:Key="CardBorderBrush" Color="#E3E7EE"/>
+
+    <SolidColorBrush x:Key="BrandPrimaryBrush" Color="#2F54EB"/>
+    <SolidColorBrush x:Key="BrandDeepBrush" Color="#1D39C4"/>
+    <SolidColorBrush x:Key="BrandSoftBrush" Color="#EAEEFC"/>
+    <SolidColorBrush x:Key="BrandSoftHoverBrush" Color="#DDE5FB"/>
+
+    <LinearGradientBrush x:Key="BrandGradientBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#2F54EB" Offset="0"/>
+        <GradientStop Color="#6D3FEA" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="BrandGradientHoverBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#3D64F6" Offset="0"/>
+        <GradientStop Color="#7A4DF0" Offset="1"/>
+    </LinearGradientBrush>
+
+    <!-- 覆盖 HandyControl 主题关键色，使内置控件统一换肤 -->
+    <SolidColorBrush x:Key="PrimaryBrush" Color="#2F54EB"/>
+    <SolidColorBrush x:Key="PrimaryTextBrush" Color="#1B2438"/>
+    <SolidColorBrush x:Key="SecondaryTextBrush" Color="#5B6675"/>
+    <SolidColorBrush x:Key="RegionBrush" Color="#EEF1F6"/>
+
+    <!-- 状态色 -->
+    <SolidColorBrush x:Key="StatusSuccessBrush" Color="#0E9F6E"/>
+    <SolidColorBrush x:Key="StatusSuccessBgBrush" Color="#E5F6EF"/>
+    <SolidColorBrush x:Key="StatusDangerBrush" Color="#E03B45"/>
+    <SolidColorBrush x:Key="StatusDangerBgBrush" Color="#FCEBEC"/>
+    <SolidColorBrush x:Key="StatusSkipBrush" Color="#6B7280"/>
+    <SolidColorBrush x:Key="StatusSkipBgBrush" Color="#EEF0F4"/>
+
+    <!-- ============================================================
+         通用卡片
+         ============================================================ -->
+    <Style x:Key="AppCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="White"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="18"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+    </Style>
+
+    <Style x:Key="SectionLabelStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}"/>
+    </Style>
+
+    <!-- ============================================================
+         模式选择卡片（RadioButton 自定义模板）
+         ============================================================ -->
+    <Style x:Key="ModeOptionStyle" TargetType="RadioButton">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Root"
+                            CornerRadius="10" BorderThickness="1.5"
+                            Background="White"
+                            BorderBrush="{StaticResource CardBorderBrush}"
+                            Padding="16,12">
+                        <StackPanel Orientation="Horizontal">
+                            <Border x:Name="Bullet"
+                                    Width="18" Height="18" CornerRadius="9"
+                                    BorderThickness="2" BorderBrush="#C9D2E3"
+                                    Background="White"
+                                    VerticalAlignment="Center" Margin="0,0,12,0">
+                                <Border x:Name="BulletDot"
+                                        Width="8" Height="8" CornerRadius="4"
+                                        Background="{StaticResource BrandPrimaryBrush}"
+                                        Visibility="Collapsed"/>
+                            </Border>
+                            <StackPanel>
+                                <TextBlock Text="{TemplateBinding Content}"
+                                           FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{StaticResource PrimaryTextBrush}"/>
+                                <TextBlock Text="{TemplateBinding Tag}"
+                                           FontSize="11" Margin="0,3,0,0"
+                                           Foreground="{StaticResource SecondaryTextBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource BrandSoftBrush}"/>
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource BrandPrimaryBrush}"/>
+                            <Setter TargetName="Bullet" Property="BorderBrush" Value="{StaticResource BrandPrimaryBrush}"/>
+                            <Setter TargetName="BulletDot" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="BorderBrush" Value="#BCC8F5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================================
+         路径行
+         ============================================================ -->
+    <Style x:Key="PathRowStyle" TargetType="Border">
+        <Setter Property="Background" Value="#F8F9FC"/>
+        <Setter Property="BorderBrush" Value="#E9ECF3"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="10,6"/>
+    </Style>
+
+    <Style x:Key="IconChipStyle" TargetType="Border">
+        <Setter Property="Width" Value="28"/>
+        <Setter Property="Height" Value="28"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Background" Value="{StaticResource BrandSoftBrush}"/>
+    </Style>
+
+    <!-- ============================================================
+         主执行按钮（渐变）
+         ============================================================ -->
+    <Style x:Key="ExecuteButtonStyle" TargetType="Button">
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg"
+                            CornerRadius="9"
+                            Background="{StaticResource BrandGradientBrush}"
+                            Padding="28,11">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource BrandGradientHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bg" Property="Opacity" Value="0.85"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bg" Property="Opacity" Value="0.45"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================================
+         浏览按钮（浅靛蓝描边）
+         ============================================================ -->
+    <Style x:Key="BrowseButtonStyle" TargetType="Button">
+        <Setter Property="Foreground" Value="{StaticResource BrandPrimaryBrush}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg"
+                            CornerRadius="8"
+                            Background="{StaticResource BrandSoftBrush}"
+                            BorderBrush="#D8E0F8" BorderThickness="1"
+                            Padding="18,7">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource BrandSoftHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bg" Property="Opacity" Value="0.8"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>
