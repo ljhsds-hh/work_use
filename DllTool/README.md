@@ -63,3 +63,7 @@ dotnet run --project Code/tools/UiTest      # UI 流程测试
 - 完整源码（`Code/`）
 - 可运行的单文件 exe（`publish\DllTool.App.exe`，通过 GitHub Release 发布）
 - 持久化日志位于 `D:\logs\DllTool\`；备份目录由用户在运行时指定
+
+## 下载
+
+最新版本:[v1.0.0](https://github.com/ljhsds-hh/work_use/releases/tag/v1.0.0)(附 `DllTool.App.exe` 与 `SHA256.txt` 校验文件)

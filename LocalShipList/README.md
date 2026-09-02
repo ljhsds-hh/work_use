@@ -39,3 +39,7 @@ SHA 按新到旧排列,必须是连续提交。输出同样每行一个 DLL(适�
 
 无需安装 Visual Studio,双击 `Code/build.cmd` 即可(调用系统自带 .NET Framework 编译器),
 产物输出到 `Code/publish/LocalShipList.exe`。需求细节见 [Docs/需求.md](Docs/需求.md)。
+
+## 下载
+
+最新版本:[v1.0.1](https://github.com/ljhsds-hh/work_use/releases/tag/v1.0.1)(附 `LocalShipList.exe` 与 `SHA256.txt` 校验文件)
