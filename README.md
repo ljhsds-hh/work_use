@@ -7,6 +7,7 @@
 | 工具 | 简介 | 技术栈 | 文档 |
 | --- | --- | --- | --- |
 | [DLL 版本替换备份工具](DllTool/README.md) | 对比新版 DLL 与目标目录存量 DLL，完成旧文件安全备份与可控版本覆盖，全程留痕可回溯 | C# / WPF / .NET 9 | [需求说明](DllTool/Docs/需求.md) |
+| [Local 出荷 DLL 清单工具](LocalShipList/README.md) | 按提交履历自动计算 local 出荷（紧急出盒）涉及的全部 DLL / XAP 名称，支持一条或连续多条提交，每行一个输出 | C# / WinForms / .NET Framework 4.x | [需求说明](LocalShipList/Docs/需求.md) |
 
 ## 目录结构
 
