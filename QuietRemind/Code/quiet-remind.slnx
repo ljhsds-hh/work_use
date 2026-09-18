@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/QuietRemind/QuietRemind.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/QuietRemind.Tests/QuietRemind.Tests.csproj" />
+  </Folder>
+</Solution>

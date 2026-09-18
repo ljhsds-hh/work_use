@@ -1,0 +1,62 @@
+<hc:Window x:Class="QuietRemind.Views.TaskEditorWindow"
+          xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+          xmlns:hc="https://handyorg.github.io/handycontrol"
+          Title="{Binding TitleText}"
+          Width="440" SizeToContent="Height"
+          WindowStartupLocation="CenterOwner"
+          ResizeMode="NoResize" ShowInTaskbar="False">
+    <hc:Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </hc:Window.Resources>
+    <StackPanel Margin="24">
+        <TextBlock Text="任务内容" Margin="0,0,0,4" />
+        <hc:TextBox Text="{Binding Content, UpdateSourceTrigger=PropertyChanged}" MaxLength="200" />
+
+        <TextBlock Text="循环规则" Margin="0,16,0,4" />
+        <StackPanel Orientation="Horizontal">
+            <RadioButton Content="单次" IsChecked="{Binding IsOnce, Mode=OneWay}" GroupName="Recurrence" Margin="0,0,14,0" Tag="Once" Checked="OnRecurrenceChecked" />
+            <RadioButton Content="每天" IsChecked="{Binding IsDaily, Mode=OneWay}" GroupName="Recurrence" Margin="0,0,14,0" Tag="Daily" Checked="OnRecurrenceChecked" />
+            <RadioButton Content="每周" IsChecked="{Binding IsWeekly, Mode=OneWay}" GroupName="Recurrence" Margin="0,0,14,0" Tag="Weekly" Checked="OnRecurrenceChecked" />
+            <RadioButton Content="每月" IsChecked="{Binding IsMonthly, Mode=OneWay}" GroupName="Recurrence" Tag="Monthly" Checked="OnRecurrenceChecked" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Margin="0,16,0,0" Visibility="{Binding IsOnce, Converter={StaticResource BoolToVis}}">
+            <StackPanel Width="150" Margin="0,0,24,0">
+                <TextBlock Text="日期" Margin="0,0,0,4" />
+                <hc:DatePicker SelectedDate="{Binding SingleDate}" />
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Margin="0,16,0,0" Visibility="{Binding IsWeekly, Converter={StaticResource BoolToVis}}">
+            <TextBlock Text="星期" Margin="0,6,8,0" />
+            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                <CheckBox Content="一" IsChecked="{Binding Mon}" Margin="0,0,8,0" />
+                <CheckBox Content="二" IsChecked="{Binding Tue}" Margin="0,0,8,0" />
+                <CheckBox Content="三" IsChecked="{Binding Wed}" Margin="0,0,8,0" />
+                <CheckBox Content="四" IsChecked="{Binding Thu}" Margin="0,0,8,0" />
+                <CheckBox Content="五" IsChecked="{Binding Fri}" Margin="0,0,8,0" />
+                <CheckBox Content="六" IsChecked="{Binding Sat}" Margin="0,0,8,0" />
+                <CheckBox Content="日" IsChecked="{Binding Sun}" />
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Margin="0,16,0,0" Visibility="{Binding IsMonthly, Converter={StaticResource BoolToVis}}">
+            <TextBlock Text="每月" Margin="0,6,8,0" />
+            <hc:NumericUpDown Value="{Binding MonthDay, Mode=TwoWay}" Minimum="1" Maximum="31" Width="72" />
+            <TextBlock Text="日提醒" Margin="8,6,0,0" />
+        </StackPanel>
+
+        <TextBlock Text="提醒时刻" Margin="0,16,0,4" />
+        <hc:TimePicker SelectedTime="{Binding SelectedTime, Mode=TwoWay}" Width="160" />
+
+        <TextBlock Text="{Binding ErrorText}" Foreground="#FFD23F3F" TextWrapping="Wrap"
+                   Margin="0,12,0,0" Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button Content="取消" Width="92" Height="32" Click="OnCancel" />
+            <Button Content="保存" Width="92" Height="32" Style="{StaticResource ButtonPrimary}"
+                       Margin="12,0,0,0" Click="OnSave" />
+        </StackPanel>
+    </StackPanel>
+</hc:Window>

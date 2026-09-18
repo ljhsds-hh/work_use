@@ -1,0 +1,92 @@
+<hc:Window x:Class="QuietRemind.Views.MainWindow"
+          xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+          xmlns:hc="https://handyorg.github.io/handycontrol"
+          Title="QuietRemind 任务提醒"
+          Height="580" Width="920" MinHeight="440" MinWidth="760"
+          WindowStartupLocation="CenterScreen">
+    <Grid Margin="16">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="2*" />
+            <ColumnDefinition Width="1*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- 任务列表区（需求 6.1） -->
+        <DockPanel Grid.Column="0" Margin="0,0,12,0">
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                <Button DockPanel.Dock="Right"
+                           Content="新增任务"
+                           Command="{Binding AddCommand}"
+                           Style="{StaticResource ButtonPrimary}"
+                           Width="100" />
+                <TextBlock Text="任务列表"
+                           FontSize="16" FontWeight="SemiBold"
+                           VerticalAlignment="Center" />
+            </DockPanel>
+            <DataGrid ItemsSource="{Binding Tasks}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False" CanUserDeleteRows="False"
+                      IsReadOnly="True" HeadersVisibility="Column"
+                      GridLinesVisibility="None" SelectionMode="Single"
+                      BorderThickness="0" RowHeight="42">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="任务内容" Binding="{Binding Content}" Width="*" />
+                    <DataGridTextColumn Header="循环规则" Binding="{Binding RecurrenceText}" Width="150" />
+                    <DataGridTextColumn Header="提醒时刻" Binding="{Binding TimeText}" Width="80" />
+                    <DataGridTemplateColumn Header="启用" Width="64">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <CheckBox IsChecked="{Binding IsEnabled, Mode=TwoWay}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="操作" Width="128">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="编辑" Command="{Binding EditCommand}" Height="26" Margin="0,0,6,0" />
+                                    <Button Content="删除" Command="{Binding DeleteCommand}" Height="26" Foreground="#FFD23F3F" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow">
+                        <Style.Triggers>
+                            <!-- 今日待提醒醒目区分（需求 6.1） -->
+                            <DataTrigger Binding="{Binding IsTodayDue}" Value="True">
+                                <Setter Property="Background" Value="#1A3478F6" />
+                            </DataTrigger>
+                            <!-- 单次任务已结束 -->
+                            <DataTrigger Binding="{Binding IsEnded}" Value="True">
+                                <Setter Property="Opacity" Value="0.55" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.RowStyle>
+            </DataGrid>
+        </DockPanel>
+
+        <!-- 设置区（需求 6.1 / 6.3） -->
+        <hc:Card Grid.Column="1" Padding="16">
+            <StackPanel>
+                <TextBlock Text="设置" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12" />
+                <TextBlock Text="开机自启动与进程守护" Margin="0,0,0,4" />
+                <CheckBox Content="启用（注册 Windows 计划任务）" IsChecked="{Binding GuardEnabled, Mode=TwoWay}" />
+                <TextBlock Text="稍后提醒间隔（分钟）" Margin="0,18,0,4" />
+                <StackPanel Orientation="Horizontal">
+                    <hc:NumericUpDown Value="{Binding Snooze1, Mode=TwoWay}" Minimum="1" Maximum="120" Width="72" Margin="0,0,8,0" />
+                    <hc:NumericUpDown Value="{Binding Snooze2, Mode=TwoWay}" Minimum="1" Maximum="120" Width="72" Margin="0,0,8,0" />
+                    <hc:NumericUpDown Value="{Binding Snooze3, Mode=TwoWay}" Minimum="1" Maximum="120" Width="72" />
+                </StackPanel>
+                <TextBlock Text="提醒窗口点击【稍后再提醒】时，从以上三个间隔中选择。"
+                           Foreground="#FF808080" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" />
+                <Separator Margin="0,22,0,12" />
+                <TextBlock Text="提示" FontWeight="SemiBold" Margin="0,0,0,6" />
+                <TextBlock Foreground="#FF808080" FontSize="12" TextWrapping="Wrap"
+                           Text="本工具常驻系统托盘：到点、关机前、开机后都会提醒你未完成的任务。关闭本窗口不会退出程序，请从托盘右键菜单退出。关闭开机自启动后，本次开机周期内不再自动守护。退出确认时程序会明示守护失效的影响。" />
+            </StackPanel>
+        </hc:Card>
+    </Grid>
+</hc:Window>

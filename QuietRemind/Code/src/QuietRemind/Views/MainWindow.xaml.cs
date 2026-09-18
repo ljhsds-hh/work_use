@@ -1,0 +1,71 @@
+using System.ComponentModel;
+using System.Windows;
+using HandyControl.Controls;
+using QuietRemind.Models;
+using QuietRemind.Services;
+using QuietRemind.ViewModels;
+using MessageBox = HandyControl.Controls.MessageBox;
+
+namespace QuietRemind.Views;
+
+public partial class MainWindow : HandyControl.Controls.Window
+{
+    private readonly AppServices _services;
+    private readonly MainViewModel _vm;
+
+    public MainWindow(MainViewModel vm, AppServices services)
+    {
+        InitializeComponent();
+        _vm = vm;
+        _services = services;
+        DataContext = vm;
+        vm.AddRequested += () => OpenEditor(null);
+        vm.EditRequested += task => OpenEditor(task);
+        vm.DeleteRequested += ConfirmDelete;
+        Closing += OnClosing;
+    }
+
+    private void OpenEditor(ReminderTask? existing)
+    {
+        var editorVm = new TaskEditorViewModel(existing);
+        var win = new TaskEditorWindow(editorVm);
+        if (win.ShowDialog() == true && editorVm.SavedTask is { } task)
+        {
+            if (existing is null)
+            {
+                _services.Data.Tasks.Add(task);
+            }
+            // 重建未来实例：编辑仅影响未触发实例，不影响已收尾历史（需求 2.3.2）
+            _services.Planner.RebuildFuture(_services.Data.Occurrences, task);
+            _services.Persist();
+            _services.Log.Info($"任务保存：{task.Content}（{(existing is null ? "新增" : "编辑")}）");
+            _vm.Refresh();
+        }
+    }
+
+    private void ConfirmDelete(ReminderTask task)
+    {
+        var result = MessageBox.Show(
+            $"确认删除任务「{task.Content}」？\n删除后不再提醒，已产生的提醒记录一并清除。",
+            "删除确认",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        _services.Data.Tasks.Remove(task);
+        OccurrencePlanner.RemoveTask(_services.Data.Occurrences, task.Id);
+        _services.Persist();
+        _services.Log.Info($"删除任务：{task.Content}");
+        _vm.Refresh();
+    }
+
+    private void OnClosing(object? sender, CancelEventArgs e)
+    {
+        // 关闭主窗口 = 最小化到托盘，不退出进程（需求 6.2.1）
+        e.Cancel = true;
+        Hide();
+    }
+}
