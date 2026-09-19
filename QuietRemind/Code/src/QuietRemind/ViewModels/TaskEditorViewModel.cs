@@ -10,6 +10,7 @@ public sealed class TaskEditorViewModel : ViewModelBase
     private string _content;
     private RecurrenceType _recurrence;
     private DateTime? _singleDate;
+    private DateTime? _startDate;
     private DateTime? _selectedTime;
     private int _monthDay = 1;
     private string? _errorText;
@@ -21,6 +22,7 @@ public sealed class TaskEditorViewModel : ViewModelBase
         _content = existing?.Content ?? "";
         _recurrence = existing?.RecurrenceType ?? RecurrenceType.Daily;
         _singleDate = existing?.SingleDate is { } d ? d.ToDateTime(TimeOnly.MinValue) : null;
+        _startDate = existing?.StartDate is { } s ? s.ToDateTime(TimeOnly.MinValue) : null;
         _selectedTime = DateTime.Today.Add(existing?.Time ?? new TimeSpan(9, 0, 0));
         _monthDay = existing?.MonthDay ?? 1;
         if (existing?.WeekDays is { Length: > 0 } days)
@@ -51,6 +53,7 @@ public sealed class TaskEditorViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsDaily));
                 OnPropertyChanged(nameof(IsWeekly));
                 OnPropertyChanged(nameof(IsMonthly));
+                OnPropertyChanged(nameof(IsRecurring));
             }
         }
     }
@@ -59,11 +62,19 @@ public sealed class TaskEditorViewModel : ViewModelBase
     public bool IsDaily => _recurrence == RecurrenceType.Daily;
     public bool IsWeekly => _recurrence == RecurrenceType.Weekly;
     public bool IsMonthly => _recurrence == RecurrenceType.Monthly;
+    public bool IsRecurring => _recurrence != RecurrenceType.Once;
 
     public DateTime? SingleDate
     {
         get => _singleDate;
         set => SetProperty(ref _singleDate, value);
+    }
+
+    /// <summary>循环开始日期（仅循环规则；null = 从今天开始）。</summary>
+    public DateTime? StartDate
+    {
+        get => _startDate;
+        set => SetProperty(ref _startDate, value);
     }
 
     public DateTime? SelectedTime
@@ -132,6 +143,9 @@ public sealed class TaskEditorViewModel : ViewModelBase
         task.RecurrenceType = Recurrence;
         task.SingleDate = Recurrence == RecurrenceType.Once && SingleDate is { } d
             ? DateOnly.FromDateTime(d)
+            : null;
+        task.StartDate = Recurrence != RecurrenceType.Once && StartDate is { } sd
+            ? DateOnly.FromDateTime(sd)
             : null;
         task.WeekDays = Recurrence == RecurrenceType.Weekly
             ? _weekDays.Select((on, i) => (on, i)).Where(x => x.on).Select(x => (DayOfWeek)x.i).ToArray()

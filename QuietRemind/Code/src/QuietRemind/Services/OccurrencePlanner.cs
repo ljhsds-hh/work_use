@@ -24,13 +24,16 @@ public class OccurrencePlanner
                 continue;
             }
 
+            // 循环开始日期：晚于今天则从该日起生成（需求：可控制从哪一天开始）；否则从今天起
+            var from = task.StartDate is { } sd && sd > today ? sd : today;
+
             // 按 OriginalTriggerAt 去重：snooze 只改 TriggerAt，不影响计划日期
             var existing = occurrences
                 .Where(o => o.TaskId == task.Id)
                 .Select(o => DateOnly.FromDateTime(o.OriginalTriggerAt))
                 .ToHashSet();
 
-            foreach (var date in EnumerateDates(task, today, end))
+            foreach (var date in EnumerateDates(task, from, end))
             {
                 if (!existing.Contains(date))
                 {

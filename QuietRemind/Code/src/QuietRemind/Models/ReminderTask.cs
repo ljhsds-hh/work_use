@@ -8,6 +8,8 @@ public class ReminderTask
     public TimeSpan Time { get; set; }
     public RecurrenceType RecurrenceType { get; set; } = RecurrenceType.Daily;
     public DateOnly? SingleDate { get; set; }
+    /// <summary>循环开始日期（仅 Daily/Weekly/Monthly 生效；null = 从今天起）。</summary>
+    public DateOnly? StartDate { get; set; }
     public DayOfWeek[] WeekDays { get; set; } = [];
     public int MonthDay { get; set; } = 1;
     public bool Enabled { get; set; } = true;

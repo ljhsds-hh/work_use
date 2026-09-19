@@ -56,6 +56,12 @@
                 </StackPanel>
             </StackPanel>
 
+            <StackPanel Margin="0,16,0,0" Visibility="{Binding IsRecurring, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="开始日期" FontSize="12" FontWeight="SemiBold" Foreground="#64748B" Margin="0,0,0,2" />
+                <TextBlock Text="任务从该日开始提醒，留空默认从今天开始" FontSize="11" Foreground="#94A3B8" Margin="0,0,0,6" />
+                <hc:DatePicker SelectedDate="{Binding StartDate}" Width="180" HorizontalAlignment="Left" />
+            </StackPanel>
+
             <StackPanel Orientation="Horizontal" Margin="0,16,0,0" Visibility="{Binding IsWeekly, Converter={StaticResource BoolToVis}}">
                 <TextBlock Text="星期" FontSize="12" FontWeight="SemiBold" Foreground="#64748B" Margin="0,6,8,0" />
                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">

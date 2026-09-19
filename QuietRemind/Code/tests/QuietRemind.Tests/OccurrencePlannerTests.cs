@@ -212,6 +212,33 @@ public class OccurrencePlannerTests
     }
 
     [Fact]
+    public void 循环开始日期_晚于今天_从该日起生成()
+    {
+        var task = Daily();
+        task.StartDate = new DateOnly(2026, 9, 21); // 今天 9/18，从 9/21 起
+
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task]);
+
+        Assert.Equal(4, occs.Count); // 9/21 ~ 9/24
+        Assert.Equal(new DateTime(2026, 9, 21, 16, 50, 0), occs[0].TriggerAt);
+        Assert.DoesNotContain(occs, o => o.TriggerAt < new DateTime(2026, 9, 21));
+    }
+
+    [Fact]
+    public void 循环开始日期_早于今天_仍从今天生成()
+    {
+        var task = Daily();
+        task.StartDate = new DateOnly(2026, 9, 1);
+
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task]);
+
+        Assert.Equal(7, occs.Count);
+        Assert.Equal(new DateTime(2026, 9, 18, 16, 50, 0), occs[0].TriggerAt);
+    }
+
+    [Fact]
     public void 删除任务_历史实例保留_引擎按任务缺失过滤()
     {
         // 需求 2.3.3 / 8.3：删除任务不清除历史实例记录，仅停止参与提醒
