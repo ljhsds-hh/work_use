@@ -4,7 +4,7 @@ using QuietRemind.ViewModels;
 
 namespace QuietRemind.Views;
 
-public partial class TaskEditorWindow : HandyControl.Controls.Window
+public partial class TaskEditorWindow : Window
 {
     private readonly TaskEditorViewModel _vm;
 

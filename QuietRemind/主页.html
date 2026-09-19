@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuietRemind - 企业级 UI 设计规范原型</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-light: #eff6ff;
+      --bg-page: #f1f5f9;
+      --bg-card: #ffffff;
+      --border-color: #e2e8f0;
+      --text-main: #0f172a;
+      --text-sub: #64748b;
+      --text-muted: #94a3b8;
+      --danger: #ef4444;
+      --success: #10b981;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.02);
+      --shadow-window: 0 20px 40px -10px rgba(15, 23, 42, 0.18), 0 0 1px 1px rgba(0,0,0,0.06);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background: #0f172a;
+      padding: 40px 20px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 50px;
+    }
+
+    .section-title {
+      color: #94a3b8;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: -35px;
+      font-weight: 600;
+    }
+
+    /* ==========================================================================
+       1. 任务提醒弹窗 (QuietRemind 提醒)
+       ========================================================================== */
+    .popup-window {
+      width: 480px;
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-window);
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      animation: floatIn 0.3s ease-out;
+    }
+
+    /* 左侧品牌状态条 */
+    .popup-window::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 5px;
+      background: var(--primary);
+    }
+
+    .popup-header {
+      padding: 14px 20px 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .popup-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .popup-brand-logo {
+      width: 16px;
+      height: 16px;
+      background: var(--primary);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 10px;
+      font-weight: bold;
+    }
+
+    .popup-brand-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-sub);
+    }
+
+    .popup-time {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-feature-settings: "tnum";
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .popup-body {
+      padding: 12px 20px 18px 20px;
+    }
+
+    .popup-task-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .tag-badge {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--primary);
+      background: var(--primary-light);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .popup-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* 按钮样式体系 */
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      height: 34px;
+      padding: 0 16px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+    }
+
+    /* HandyControl 风格的 ButtonGroup */
+    .btn-group {
+      display: flex;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      background: #f8fafc;
+    }
+
+    .btn-group-item {
+      border: none;
+      background: transparent;
+      padding: 0 12px;
+      height: 32px;
+      font-size: 12px;
+      color: var(--text-sub);
+      cursor: pointer;
+      border-right: 1px solid var(--border-color);
+      transition: background 0.15s;
+    }
+
+    .btn-group-item:last-child {
+      border-right: none;
+    }
+
+    .btn-group-item:hover {
+      background: #fff;
+      color: var(--text-main);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border: none;
+      color: var(--text-sub);
+      font-size: 13px;
+      cursor: pointer;
+      padding: 0 10px;
+      height: 34px;
+      border-radius: var(--radius-sm);
+      margin-left: auto;
+      transition: all 0.15s;
+    }
+
+    .btn-ghost:hover {
+      background: #f1f5f9;
+      color: var(--danger);
+    }
+
+
+    /* ==========================================================================
+       2. 主界面窗口 (QuietRemind 任务管理器)
+       ========================================================================== */
+    .app-window {
+      width: 960px;
+      height: 600px;
+      background: var(--bg-page);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-window);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* 标题栏 */
+    .window-titlebar {
+      height: 40px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--border-color);
+      user-select: none;
+    }
+
+    .window-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-sub);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .window-controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    .window-btn {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .btn-close { background: #ff5f56; }
+    .btn-min { background: #ffbd2e; }
+    .btn-max { background: #27c93f; }
+
+    /* 主布局容器 */
+    .window-content {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* 左侧：任务列表主区 */
+    .main-panel {
+      flex: 1;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .panel-header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .panel-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .count-badge {
+      background: #e2e8f0;
+      color: var(--text-sub);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    /* 数据表格卡片容器 */
+    .table-card {
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-card);
+      border: 1px solid var(--border-color);
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th {
+      background: #f8fafc;
+      padding: 12px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-sub);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    td {
+      padding: 14px 16px;
+      font-size: 13px;
+      color: var(--text-main);
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: middle;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: #f8fafc;
+    }
+
+    /* 仿 HandyControl 开关 Switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 38px;
+      height: 20px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #cbd5e1;
+      transition: .2s;
+      border-radius: 20px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      transition: .2s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--primary);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(18px);
+    }
+
+    .action-links {
+      display: flex;
+      gap: 12px;
+    }
+
+    .action-links a {
+      color: var(--primary);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .action-links a.delete {
+      color: var(--danger);
+    }
+
+    /* 右侧：设置面板 */
+    .side-panel {
+      width: 310px;
+      background: #ffffff;
+      border-left: 1px solid var(--border-color);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+    }
+
+    .side-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .setting-card {
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .setting-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .setting-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .interval-inputs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .input-box {
+      border: 1px solid var(--border-color);
+      background: #fff;
+      border-radius: var(--radius-sm);
+      padding: 6px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .input-box span {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: normal;
+    }
+
+    /* 类似 HandyControl hc:Alert 提示盒 */
+    .alert-box {
+      background: #eff6ff;
+      border-left: 3px solid var(--primary);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      padding: 12px;
+      font-size: 11px;
+      color: #1e40af;
+      line-height: 1.6;
+    }
+
+    .alert-box strong {
+      display: block;
+      margin-bottom: 2px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ================= 模块 1：任务提醒弹窗 ================= -->
+  <div class="section-title">01. 提醒弹窗交互设计（带阴影浮层）</div>
+
+  <div class="popup-window">
+    <div class="popup-header">
+      <div class="popup-brand">
+        <div class="popup-brand-logo">Q</div>
+        <span class="popup-brand-name">QuietRemind · 到期提醒</span>
+      </div>
+      <div class="popup-time">
+        <span>⏰ 09:55</span>
+      </div>
+    </div>
+
+    <div class="popup-body">
+      <div class="popup-task-title">
+        记得打卡
+        <span class="tag-badge">高优先级</span>
+      </div>
+
+      <div class="popup-actions">
+        <!-- 主操作 -->
+        <button class="btn-primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          完成
+        </button>
+
+        <!-- 稍后提醒分段组 -->
+        <div class="btn-group">
+          <button class="btn-group-item">5 分钟</button>
+          <button class="btn-group-item">10 分钟</button>
+          <button class="btn-group-item">30 分钟</button>
+        </div>
+
+        <!-- 弱化操作 -->
+        <button class="btn-ghost">跳过</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ================= 模块 2：任务管理主界面 ================= -->
+  <div class="section-title">02. 客户端主界面设计（双栏 + 卡片化）</div>
+
+  <div class="app-window">
+    <!-- 模拟现代无边框标题栏 -->
+    <div class="window-titlebar">
+      <div class="window-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        QuietRemind 任务提醒
+      </div>
+      <div class="window-controls">
+        <span class="window-btn btn-min"></span>
+        <span class="window-btn btn-max"></span>
+        <span class="window-btn btn-close"></span>
+      </div>
+    </div>
+
+    <div class="window-content">
+      <!-- 左侧主要区域 -->
+      <div class="main-panel">
+        <div class="panel-header">
+          <div class="panel-header-left">
+            <h1 class="panel-title">任务列表</h1>
+            <span class="count-badge">2 项待处理</span>
+          </div>
+          <button class="btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            新增任务
+          </button>
+        </div>
+
+        <!-- 卡片表格 -->
+        <div class="table-card">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 32%;">任务内容</th>
+                <th style="width: 20%;">循环规则</th>
+                <th style="width: 25%;">下次提醒</th>
+                <th style="width: 10%;">状态</th>
+                <th style="width: 13%;">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="font-weight: 600;">记得打卡</td>
+                <td><span class="tag-badge">工作日循环</span></td>
+                <td style="color: var(--text-sub);">今日 09:55</td>
+                <td>
+                  <label class="switch">
+                    <input type="checkbox" checked>
+                    <span class="slider"></span>
+                  </label>
+                </td>
+                <td>
+                  <div class="action-links">
+                    <a>编辑</a>
+                    <a class="delete">删除</a>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td style="font-weight: 600;">下班总结与工时提交</td>
+                <td><span class="tag-badge" style="color: #059669; background: #ecfdf5;">每天</span></td>
+                <td style="color: var(--text-sub);">今日 18:30</td>
+                <td>
+                  <label class="switch">
+                    <input type="checkbox" checked>
+                    <span class="slider"></span>
+                  </label>
+                </td>
+                <td>
+                  <div class="action-links">
+                    <a>编辑</a>
+                    <a class="delete">删除</a>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 右侧设置面板 -->
+      <div class="side-panel">
+        <div class="side-title">设置偏好</div>
+
+        <!-- 守护进程 -->
+        <div class="setting-card">
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">开机自启与进程守护</div>
+              <div class="setting-desc">注册 Windows 计划任务</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 稍后提醒间隔 -->
+        <div>
+          <div class="setting-label" style="margin-bottom: 2px;">稍后提醒预设</div>
+          <div class="setting-desc" style="margin-bottom: 8px;">弹窗点击稍后提醒时可供选择的分钟数</div>
+          <div class="interval-inputs">
+            <div class="input-box">5 <span>分</span></div>
+            <div class="input-box">10 <span>分</span></div>
+            <div class="input-box">30 <span>分</span></div>
+          </div>
+        </div>
+
+        <!-- 底部说明条 (类似 HandyControl 的 Alert 组件) -->
+        <div class="alert-box" style="margin-top: auto;">
+          <strong>系统托盘运行说明</strong>
+          本工具常驻系统托盘，关机前、到点或开机后会自动检查未处理事项。双击托盘图标可重新呼出主面板。
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

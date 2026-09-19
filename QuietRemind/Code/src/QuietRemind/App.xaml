@@ -4,9 +4,11 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- HandyControl 组件库，默认浅色皮肤（办公场景简洁克制） -->
+                <!-- HandyControl 组件库（编辑窗等 HC 控件依赖） -->
                 <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/SkinDefault.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/Theme.xaml" />
+                <!-- QuietRemind 设计令牌（对齐 主页.html 设计规范，后合并优先） -->
+                <ResourceDictionary Source="Themes/DesignTokens.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

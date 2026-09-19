@@ -216,6 +216,7 @@ public partial class App : Application
         _services.Log.Info($"提醒展示：到期 {due.Count} 条，错过 {missed.Count} 条");
         var vm = new ReminderWindowViewModel(_services, entries);
         var win = new ReminderWindow(vm);
+        win.Closed += (_, _) => _mainWindow?.RefreshRows();
         win.Show();
         win.Activate();
     }

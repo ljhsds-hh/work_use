@@ -5,7 +5,7 @@ using QuietRemind.Services;
 
 namespace QuietRemind.ViewModels;
 
-/// <summary>全屏提醒窗口视图模型：合并展示多条到期实例，逐条收尾，全部收尾后关闭（需求 3.4）。</summary>
+/// <summary>提醒浮层窗口视图模型：合并展示多条到期实例，逐条收尾，全部收尾后关闭（需求 3.4）。</summary>
 public sealed class ReminderWindowViewModel : ViewModelBase
 {
     private readonly AppServices _services;
@@ -19,11 +19,16 @@ public sealed class ReminderWindowViewModel : ViewModelBase
             item.Settled += OnItemSettled;
             Items.Add(item);
         }
+        var earliest = Items.Select(i => i.Occurrence.OriginalTriggerAt).OrderBy(t => t).FirstOrDefault();
+        HeaderTime = earliest == default ? "--:--" : earliest.ToString("HH:mm");
     }
 
     public ObservableCollection<ReminderItemViewModel> Items { get; } = [];
 
     public bool IsMissedWindow => Items.Any(i => i.IsMissed);
+
+    /// <summary>头部展示的计划时刻：最早一条未处理提醒的 HH:mm。</summary>
+    public string HeaderTime { get; }
 
     /// <summary>全部条目收尾完成，窗口应关闭。</summary>
     public event Action? AllSettled;

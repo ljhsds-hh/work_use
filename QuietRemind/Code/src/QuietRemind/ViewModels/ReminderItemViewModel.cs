@@ -1,6 +1,7 @@
 using QuietRemind.Helpers;
 using QuietRemind.Models;
 using QuietRemind.Services;
+using QuietRemind.ViewModels;
 
 namespace QuietRemind.ViewModels;
 
@@ -13,11 +14,13 @@ public sealed class SnoozeOptionViewModel(string label, RelayCommand command)
 /// <summary>提醒窗口单条任务条目：内容 + 计划时刻 + 收尾按钮（需求 3.3）。</summary>
 public sealed class ReminderItemViewModel : ViewModelBase
 {
+    private readonly ReminderTask _task;
     private readonly ReminderEngine _engine;
     private bool _isSettled;
 
     public ReminderItemViewModel(ReminderTask task, Occurrence occurrence, ReminderEngine engine, int[] snoozeMinutes)
     {
+        _task = task;
         _engine = engine;
         Occurrence = occurrence;
         IsMissed = occurrence.State == OccurrenceState.Missed;
@@ -34,6 +37,8 @@ public sealed class ReminderItemViewModel : ViewModelBase
     public string Content { get; }
     public string TimeText => Occurrence.OriginalTriggerAt.ToString("yyyy-MM-dd HH:mm");
     public bool IsMissed { get; }
+    /// <summary>标题旁徽标：已错过（红）或循环规则（蓝）。</summary>
+    public string BadgeText => IsMissed ? "已错过" : TaskRowViewModel.DescribeRecurrence(_task);
     public bool IsSettled => _isSettled;
     public List<SnoozeOptionViewModel> SnoozeOptions { get; }
 

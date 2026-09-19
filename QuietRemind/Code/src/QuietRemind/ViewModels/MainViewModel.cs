@@ -19,6 +19,22 @@ public sealed class MainViewModel : ViewModelBase
 
     public ObservableCollection<TaskRowViewModel> Tasks { get; } = [];
 
+    /// <summary>今日待处理实例数（Pending/Missed），列表标题旁胶囊展示。</summary>
+    public string PendingCountText
+    {
+        get => _pendingCountText;
+        set => SetProperty(ref _pendingCountText, value);
+    }
+    private string _pendingCountText = "0 项待处理";
+
+    /// <summary>无任务时的空态提示。</summary>
+    public bool HasNoTask
+    {
+        get => _hasNoTask;
+        set => SetProperty(ref _hasNoTask, value);
+    }
+    private bool _hasNoTask;
+
     /// <summary>请求打开新增编辑器（View 层订阅实现）。</summary>
     public event Action? AddRequested;
 
@@ -87,6 +103,7 @@ public sealed class MainViewModel : ViewModelBase
     {
         var now = _services.Clock.Now;
         var today = DateOnly.FromDateTime(now);
+        var todayPending = 0;
 
         Tasks.Clear();
         foreach (var task in _services.Data.Tasks)
@@ -98,8 +115,31 @@ public sealed class MainViewModel : ViewModelBase
             row.IsEnded = task.RecurrenceType == RecurrenceType.Once
                 && taskOccs.All(o => o.State is OccurrenceState.Completed or OccurrenceState.Skipped)
                 && taskOccs.Count > 0;
+
+            // 下一次未处理提醒时刻（列表“下次提醒”列）
+            var next = taskOccs
+                .Where(o => o.State is OccurrenceState.Pending or OccurrenceState.Missed)
+                .Select(o => o.TriggerAt)
+                .OrderBy(t => t)
+                .FirstOrDefault();
+            row.NextRemindText = next == default
+                ? "—"
+                : DateOnly.FromDateTime(next) switch
+                {
+                    var d when d == today => $"今日 {next:HH:mm}",
+                    var d when d == today.AddDays(1) => $"明日 {next:HH:mm}",
+                    var d => $"{d:M月d日} {next:HH:mm}",
+                };
+
+            if (row.IsTodayDue)
+            {
+                todayPending++;
+            }
             Tasks.Add(row);
         }
+
+        PendingCountText = $"{todayPending} 项待处理";
+        HasNoTask = Tasks.Count == 0;
     }
 
     private void OnAdd() => AddRequested?.Invoke();

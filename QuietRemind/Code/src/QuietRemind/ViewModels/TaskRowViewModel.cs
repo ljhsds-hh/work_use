@@ -26,6 +26,7 @@ public sealed class TaskRowViewModel : ViewModelBase
     public Guid Id => _task.Id;
     public string Content => _task.Content;
     public string TimeText => _task.Time.ToString(@"hh\:mm");
+    public RecurrenceType Recurrence => _task.RecurrenceType;
     public string RecurrenceText => DescribeRecurrence(_task);
     public bool IsEnabled
     {
@@ -42,6 +43,14 @@ public sealed class TaskRowViewModel : ViewModelBase
             OnPropertyChanged();
         }
     }
+
+    /// <summary>下一次未处理提醒时刻（今日 → “今日 HH:mm”；无 → “—”）。</summary>
+    public string NextRemindText
+    {
+        get => _nextRemindText;
+        set => SetProperty(ref _nextRemindText, value);
+    }
+    private string _nextRemindText = "—";
 
     /// <summary>今日有待提醒/已错过实例（醒目区分，需求 6.1）。</summary>
     public bool IsTodayDue

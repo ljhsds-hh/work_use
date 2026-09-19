@@ -8,7 +8,7 @@ using MessageBox = HandyControl.Controls.MessageBox;
 
 namespace QuietRemind.Views;
 
-public partial class MainWindow : HandyControl.Controls.Window
+public partial class MainWindow : System.Windows.Window
 {
     private readonly AppServices _services;
     private readonly MainViewModel _vm;
@@ -69,4 +69,14 @@ public partial class MainWindow : HandyControl.Controls.Window
         e.Cancel = true;
         Hide();
     }
+
+    private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void OnToggleMaximize(object sender, RoutedEventArgs e)
+        => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    private void OnCloseToTray(object sender, RoutedEventArgs e) => Hide();
+
+    /// <summary>提醒收尾等实例状态变化后，刷新列表派生数据（下次提醒 / 待处理数）。</summary>
+    public void RefreshRows() => _vm.Refresh();
 }
