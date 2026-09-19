@@ -22,7 +22,7 @@ public partial class ReminderWindow : Window
         Loaded += (_, _) => ApplyBackdrop();
         Closing += (_, e) =>
         {
-            // 未全部收尾禁止关闭（需求 3.2.5：不允许 ESC / Alt+F4 / 关闭按钮直接关闭）
+            // 未全部收尾禁止关闭（需求 3.2.6：不允许 ESC / Alt+F4 / 关闭按钮直接关闭）
             if (!_allSettled)
             {
                 e.Cancel = true;
@@ -73,7 +73,7 @@ public partial class ReminderWindow : Window
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        // 屏蔽 ESC 与 Alt+F4（需求 3.2.5）
+        // 屏蔽 ESC 与 Alt+F4（需求 3.2.6）
         if (e.Key == Key.Escape || (e.Key == Key.System && e.SystemKey == Key.F4))
         {
             e.Handled = true;
