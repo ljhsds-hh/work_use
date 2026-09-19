@@ -27,9 +27,10 @@ public class OccurrencePlanner
             // 循环开始日期：晚于今天则从该日起生成（需求：可控制从哪一天开始）；否则从今天起
             var from = task.StartDate is { } sd && sd > today ? sd : today;
 
-            // 按 OriginalTriggerAt 去重：snooze 只改 TriggerAt，不影响计划日期
+            // 按 OriginalTriggerAt 去重：仅未收尾实例占位（已收尾为历史记录，编辑重建后同日可再生成新实例）
             var existing = occurrences
-                .Where(o => o.TaskId == task.Id)
+                .Where(o => o.TaskId == task.Id
+                    && o.State is OccurrenceState.Pending or OccurrenceState.Missed)
                 .Select(o => DateOnly.FromDateTime(o.OriginalTriggerAt))
                 .ToHashSet();
 
@@ -56,13 +57,15 @@ public class OccurrencePlanner
         return added;
     }
 
-    /// <summary>编辑任务后重建未来实例：删除未进入终态且未弹过窗、未处于稍后再提醒推迟期的实例后按新规则重新生成（需求 2.3.2；snooze 中的实例 TriggerAt 已被推迟，保留以免用户所选推迟时刻丢失）。</summary>
+    /// <summary>
+    /// 编辑任务后重建：删除该任务全部未收尾实例（含已触发、已错过、稍后再提醒推迟中的），
+    /// 按新规则重新生成并立即生效（需求 2.3.2，2026-09-19 用户澄清：编辑后新设置须马上生效）。
+    /// 已收尾实例（完成/跳过）为历史记录，保留不动。
+    /// </summary>
     public void RebuildFuture(List<Occurrence> occurrences, ReminderTask task, int horizonDays = 7)
     {
         occurrences.RemoveAll(o => o.TaskId == task.Id
-            && o.State == OccurrenceState.Pending
-            && o.ReminderShownAt == null
-            && o.TriggerAt == o.OriginalTriggerAt);
+            && o.State is OccurrenceState.Pending or OccurrenceState.Missed);
 
         if (task.Enabled)
         {

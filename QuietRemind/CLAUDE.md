@@ -19,7 +19,7 @@
    - 时钟向前大跳（>10s 且非睡眠）→ 全量错过扫描兜底；首轮 _lastPoll 初始化为 now-2s
    - **提醒弹出本身不改变实例状态，仅收尾动作变更**（Settle）
 2. **关机拦截**：App.SessionEnding 处理器内同步 ShowDialog 拦截窗（消息泵运行、系统等待回复）；【取消关机】→ e.Cancel=true；【仍要关机】→ 放行（不重发关机指令，天然避免反复拦截）；无欠账静默放行
-3. **实例滚动生成**（OccurrencePlanner）：[今天, +7天) 半开区间；按 OriginalTriggerAt 去重（snooze 只改 TriggerAt）；当天已过时刻不追溯（2.3.1）；编辑用 RebuildFuture（删 Pending 未弹实例重建，不碰已收尾历史）
+3. **实例滚动生成**（OccurrencePlanner）：[生效起始日, +7天) 半开区间（StartDate 晚于今天则从 StartDate 起）；去重仅未收尾实例占位；当天已过时刻不追溯（2.3.1）；**编辑用 RebuildFuture：删除该任务全部未收尾实例（含已触发/已错过/snooze 中）按新设置重建并立即生效**（2026-09-19 用户澄清：编辑保存后当天即按新时刻触发），已收尾历史不动
 4. **计划任务守护**（TaskSchedulerGuard）：任务名 `QuietRemind`，LogonTrigger 优先 + 每 5 分钟 TimeTrigger（起点=注册+5min，避免当天空窗），动作统一带 `--scheduled` 参数，InteractiveToken 需显式传 userId；**LogonTrigger 被拒时自动降级为仅守护触发**并记日志，登录语义由进程内 IsRecentBootStartup（系统启动 2 分钟内）等价保障；SameAction 幂等校验含守护触发器 5 分钟重复配置
 5. **启动编排**（App.xaml.cs）：Mutex（Global\QuietRemind 优先，受限环境回退 Local\）→ 退出标记判定（守护语义遇标记静默退出；登录/手动语义清除）→ 数据加载（损坏备份后空数据启动）→ 守护注册 → 实例补齐落盘 → 错过扫描（判错过即落盘）→ 1s DispatcherTimer 轮询（含单实例唤醒信号消费，无常驻后台线程）→ 托盘；`--scheduled` 静默进托盘，手动启动显示主窗口
 6. **单实例唤醒**：命名事件 QuietRemind_ShowMain（Global 优先 Local 回退），手动重复启动时唤起已有实例主界面；已有实例在轮询中消费信号

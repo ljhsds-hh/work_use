@@ -191,27 +191,6 @@ public class OccurrencePlannerTests
     }
 
     [Fact]
-    public void 编辑任务_正在稍后再提醒的实例保留_不丢推迟时刻()
-    {
-        var task = Daily();
-        var occs = new List<Occurrence>();
-        _planner.EnsureUpTo(occs, [task]);
-
-        // 模拟今天实例已弹并 snooze：回 Pending、ReminderShownAt 清空、TriggerAt 推迟
-        occs[0].State = OccurrenceState.Pending;
-        occs[0].ReminderShownAt = null;
-        occs[0].TriggerAt = _clock.Now.AddMinutes(10); // 推迟（≠ OriginalTriggerAt）
-
-        // 用户此时编辑任务（仅改文案）
-        task.Content = "改个名字";
-        _planner.RebuildFuture(occs, task);
-
-        // snooze 实例保留，推迟时刻不丢（需求 3.3 / 1.2.1）
-        var snoozed = Assert.Single(occs, o => o.TriggerAt != o.OriginalTriggerAt);
-        Assert.Equal(OccurrenceState.Pending, snoozed.State);
-    }
-
-    [Fact]
     public void 循环开始日期_晚于今天_从该日起生成()
     {
         var task = Daily();
@@ -236,6 +215,46 @@ public class OccurrencePlannerTests
 
         Assert.Equal(7, occs.Count);
         Assert.Equal(new DateTime(2026, 9, 18, 16, 50, 0), occs[0].TriggerAt);
+    }
+
+    [Fact]
+    public void 编辑任务_已触发未收尾实例_按新时间立即生效()
+    {
+        // 用户场景：16:50 已触发过一次（未收尾），编辑把时间改到 17:10 → 今天必须按新时间再次触发
+        var task = Daily();
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task]);
+
+        // 模拟 16:50 已触发（已弹、未收尾）
+        occs[0].ReminderShownAt = _clock.Now;
+        task.Time = new TimeSpan(17, 10, 0);
+
+        _planner.RebuildFuture(occs, task);
+
+        // 旧实例（已触发）被重建，今天生成 17:10 的新实例
+        var todayOcc = occs.Single(o => DateOnly.FromDateTime(o.TriggerAt) == new DateOnly(2026, 9, 18));
+        Assert.Equal(new DateTime(2026, 9, 18, 17, 10, 0), todayOcc.TriggerAt);
+        Assert.Equal(OccurrenceState.Pending, todayOcc.State);
+        Assert.Null(todayOcc.ReminderShownAt); // 待新时间再次触发
+    }
+
+    [Fact]
+    public void 编辑任务_稍后再提醒推迟中的实例一并重建_按新设置生效()
+    {
+        var task = Daily();
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task]);
+
+        // snooze 推迟中（Pending、ReminderShownAt=null、TriggerAt 已推迟）
+        occs[0].TriggerAt = _clock.Now.AddMinutes(10);
+
+        task.Time = new TimeSpan(18, 0, 0);
+        _planner.RebuildFuture(occs, task);
+
+        // 用户主动编辑 = 以新设置为准：推迟被重置，按新时刻生成
+        Assert.All(occs.Where(o => o.State == OccurrenceState.Pending),
+            o => Assert.Equal(new TimeSpan(18, 0, 0), o.TriggerAt.TimeOfDay));
+        Assert.DoesNotContain(occs, o => o.TriggerAt > _clock.Now && o.TriggerAt < new DateTime(2026, 9, 18, 18, 0, 0));
     }
 
     [Fact]
