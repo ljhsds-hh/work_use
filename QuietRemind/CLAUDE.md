@@ -6,7 +6,7 @@
 - **技术栈**：C# / WPF / .NET 8 / HandyControl（UI 一切以 HandyControl 为核心，未提供才退用 WPF 原生；托盘图标允许成熟第三方方案）
 - **提醒必达三路径闭环**：到点全屏提醒 → 关机前拦截提醒（欠账判定：今天还欠着 + 任务启用 + 未终态）→ 开机/唤醒补提醒（错过判定）
 - **约束**：提醒全程无声音、无花瓣类装饰动画；提醒浮层必须逐条收尾才能关闭；关闭主窗口=最小化到托盘不退出；全程单实例；轻量原则（≤100MB、CPU≈0、无联网无广告无多余服务、日志 30 天滚动）
-- **UI 设计规范**（2026-09-19 用户提供 主页.html 模板）：主窗口与提醒浮层、编辑窗一律对齐该规范——色板 #2563EB/#1D4ED8/#EFF6FF/#F1F5F9/#E2E8F0/#0F172A/#64748B/#94A3B8/#EF4444，圆角 6/10/16，令牌与控件样式集中在 `Themes/DesignTokens.xaml`；提醒形式为**右下角浮层卡片**（非全屏遮罩，需求 3.2 已变更），无边框窗口用 WindowChrome（CaptionHeight=40）+ Win11 DWM 圆角阴影
+- **UI 设计规范**（2026-09-19 用户提供 主页.html 模板并反馈定稿）：主窗口与编辑窗对齐该规范——色板 #2563EB/#1D4ED8/#EFF6FF/#F1F5F9/#E2E8F0/#0F172A/#64748B/#94A3B8/#EF4444，圆角 6/10/16，令牌与控件样式集中在 `Themes/DesignTokens.xaml`；标题栏控制按钮为 **Windows 11 风格**（Segoe MDL2 Assets 细线图标，关闭悬停红底），禁止 macOS 三色圆点；提醒形式为**全屏暗化遮罩 + 居中卡片**（#AA101018 遮罩 + 520px 白卡居中，必达醒目性优先），无边框窗口用 WindowChrome
 - **数据**：`%AppData%\QuietRemind\`（JSON 原子写）；**日志**：`D:\logs\QuietRemind\` 按日分文件；**退出标记 exit.marker 存日志目录**（部分环境计划任务进程对 %AppData% 新文件有视图隔离，日志目录两边视图一致，实测验证）
 
 ## 关键实现机制（改动前必读）
@@ -29,7 +29,7 @@
 
 - 服务层零 UI 依赖；时间一律经 `IClock` 注入（测试用 FakeClock）
 - 任何状态变更必须 `AppServices.Persist()` 实时落盘
-- 提醒浮层禁止被 ESC/Alt+F4 关闭（Closing 里 e.Cancel）；浮层位于屏幕右下角
+- 提醒遮罩+卡片禁止被 ESC/Alt+F4 关闭（Closing 里 e.Cancel）；卡片屏幕居中
 - 新功能优先补齐单元测试（现有 39 用例）；测试工程 net8.0-windows + UseWPF 引用主工程
 - 发布：Release 单文件自包含（win-x64 压缩），见 Docs/发布部署指南.md
 - 图标由 Code/scripts/gen-icon.ps1 程序化生成，勿手工编辑 app.ico
