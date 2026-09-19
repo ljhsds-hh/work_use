@@ -9,6 +9,7 @@
 | [DLL 版本替换备份工具](DllTool/README.md) | 对比新版 DLL 与目标目录存量 DLL，完成旧文件安全备份与可控版本覆盖，全程留痕可回溯 | C# / WPF / .NET 9 | [需求说明](DllTool/Docs/需求.md) |
 | [Local 出荷 DLL 清单工具](LocalShipList/README.md) | 按提交履历自动计算 local 出荷（紧急出盒）涉及的全部 DLL / XAP 名称，支持一条或连续多条提交，每行一个输出 | C# / WinForms / .NET Framework 4.x | [需求说明](LocalShipList/Docs/需求.md) |
 | [create-tpl 项目模板快速生成工具](create-tpl/README.md) | 输入工程根目录与工程名称（一行一个，支持批量），一键生成标准化工程骨架与配套文档，单点失败隔离并汇总未完成清单 | C# / WPF / .NET 8 | [需求说明](create-tpl/Docs/需求.md) |
+| [QuietRemind 任务提醒工具](QuietRemind/README.md) | 托盘常驻任务提醒：到点全屏遮罩+居中卡片提醒（背景可自定义），关机前拦截、开机补提醒，计划任务守护，提醒必达 | C# / WPF / .NET 8 | [需求说明](QuietRemind/Docs/需求.md) |
 
 ## 目录结构
 
