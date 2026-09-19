@@ -23,6 +23,14 @@ public partial class MainWindow : System.Windows.Window
         vm.EditRequested += task => OpenEditor(task);
         vm.DeleteRequested += ConfirmDelete;
         Closing += OnClosing;
+        StateChanged += (_, _) =>
+        {
+            if (MaximizeGlyph is not null)
+            {
+                // 最大化显示“还原”图标，还原状态显示“最大化”图标
+                MaximizeGlyph.Text = char.ConvertFromUtf32(WindowState == WindowState.Maximized ? 0xE923 : 0xE922);
+            }
+        };
     }
 
     private void OpenEditor(ReminderTask? existing)

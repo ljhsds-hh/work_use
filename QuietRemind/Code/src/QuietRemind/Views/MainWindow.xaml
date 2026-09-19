@@ -32,39 +32,18 @@
                     <TextBlock Text="QuietRemind 任务提醒" FontSize="12" FontWeight="SemiBold"
                                Foreground="#64748B" VerticalAlignment="Center" Margin="8,0,0,0" />
                 </StackPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,14,0">
-                    <Button Width="26" Height="26" Background="Transparent" BorderThickness="0" Click="OnMinimize" Cursor="Hand"
-                            ToolTip="最小化">
-                        <Ellipse Width="12" Height="12" Fill="#FFBD2E" />
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Grid Background="{TemplateBinding Background}">
-                                    <ContentPresenter />
-                                </Grid>
-                            </ControlTemplate>
-                        </Button.Template>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top"
+                            WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Button Style="{StaticResource CaptionButton}" Height="40" Click="OnMinimize" ToolTip="最小化">
+                        <TextBlock Text="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="10" />
                     </Button>
-                    <Button Width="26" Height="26" Background="Transparent" BorderThickness="0" Click="OnToggleMaximize" Cursor="Hand"
-                            ToolTip="最大化 / 还原">
-                        <Ellipse Width="12" Height="12" Fill="#27C93F" />
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Grid Background="{TemplateBinding Background}">
-                                    <ContentPresenter />
-                                </Grid>
-                            </ControlTemplate>
-                        </Button.Template>
+                    <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" Height="40"
+                            Click="OnToggleMaximize" ToolTip="最大化 / 还原">
+                        <TextBlock x:Name="MaximizeGlyph" Text="&#xE922;" FontFamily="Segoe MDL2 Assets" FontSize="10" />
                     </Button>
-                    <Button Width="26" Height="26" Background="Transparent" BorderThickness="0" Click="OnCloseToTray" Cursor="Hand"
+                    <Button Style="{StaticResource CaptionCloseButton}" Height="40" Click="OnCloseToTray"
                             ToolTip="关闭（最小化到托盘）">
-                        <Ellipse Width="12" Height="12" Fill="#FF5F56" />
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Grid Background="{TemplateBinding Background}">
-                                    <ContentPresenter />
-                                </Grid>
-                            </ControlTemplate>
-                        </Button.Template>
+                        <TextBlock Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10" />
                     </Button>
                 </StackPanel>
             </DockPanel>
