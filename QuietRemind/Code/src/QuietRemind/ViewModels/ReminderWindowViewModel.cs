@@ -30,8 +30,8 @@ public sealed class ReminderWindowViewModel : ViewModelBase
 
     private void OnItemSettled(ReminderItemViewModel item)
     {
-        // 收尾即实时落盘（需求 8.2）
-        _services.Persist();
+        // 收尾即实时落盘（需求 8.2，按域仅实例文件）
+        _services.PersistOccurrences();
         _services.Log.Info($"提醒收尾：任务「{item.Content}」计划 {item.TimeText}（状态 {item.Occurrence.State}）");
         if (Items.All(i => i.IsSettled))
         {

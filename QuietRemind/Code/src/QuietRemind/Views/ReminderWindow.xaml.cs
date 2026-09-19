@@ -33,9 +33,10 @@ public partial class ReminderWindow : Window
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key is Key.Escape or Key.System && e.SystemKey == Key.F4)
+        // 屏蔽 ESC 与 Alt+F4（需求 3.2.5）
+        if (e.Key == Key.Escape || (e.Key == Key.System && e.SystemKey == Key.F4))
         {
-            e.Handled = true; // 屏蔽 ESC 与 Alt+F4
+            e.Handled = true;
         }
     }
 }

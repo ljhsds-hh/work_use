@@ -53,23 +53,18 @@ public class OccurrencePlanner
         return added;
     }
 
-    /// <summary>编辑任务后重建未来实例：删除未进入终态且未弹过窗的实例后按新规则重新生成（需求 2.3.2）。</summary>
+    /// <summary>编辑任务后重建未来实例：删除未进入终态且未弹过窗、未处于稍后再提醒推迟期的实例后按新规则重新生成（需求 2.3.2；snooze 中的实例 TriggerAt 已被推迟，保留以免用户所选推迟时刻丢失）。</summary>
     public void RebuildFuture(List<Occurrence> occurrences, ReminderTask task, int horizonDays = 7)
     {
         occurrences.RemoveAll(o => o.TaskId == task.Id
             && o.State == OccurrenceState.Pending
-            && o.ReminderShownAt == null);
+            && o.ReminderShownAt == null
+            && o.TriggerAt == o.OriginalTriggerAt);
 
         if (task.Enabled)
         {
             EnsureUpTo(occurrences, [task], horizonDays);
         }
-    }
-
-    /// <summary>删除任务时清理其全部实例（含历史，需求 2.3.3）。</summary>
-    public static void RemoveTask(List<Occurrence> occurrences, Guid taskId)
-    {
-        occurrences.RemoveAll(o => o.TaskId == taskId);
     }
 
     private static IEnumerable<DateOnly> EnumerateDates(ReminderTask task, DateOnly from, DateOnly end)

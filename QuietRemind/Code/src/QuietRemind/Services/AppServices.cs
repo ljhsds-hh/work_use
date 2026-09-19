@@ -13,11 +13,24 @@ public sealed class AppServices
     public required LogService Log { get; init; }
     public required TaskSchedulerGuard Guard { get; init; }
 
-    /// <summary>任意数据变更后统一落盘并刷新界面可读状态。</summary>
+    /// <summary>全部数据落盘（任务结构变更时使用）。</summary>
     public void Persist()
+    {
+        PersistTasks();
+        PersistOccurrences();
+        PersistSettings();
+    }
+
+    /// <summary>按域落盘：仅实例状态变更（收尾、错过判定、实例补齐）。</summary>
+    public void PersistOccurrences() => Store.SaveOccurrences(Data.Occurrences);
+
+    /// <summary>按域落盘：任务结构变更（新增/编辑/删除/启停，通常伴随实例变更）。</summary>
+    public void PersistTasks()
     {
         Store.SaveTasks(Data.Tasks);
         Store.SaveOccurrences(Data.Occurrences);
-        Store.SaveSettings(Data.Settings);
     }
+
+    /// <summary>按域落盘：设置变更。</summary>
+    public void PersistSettings() => Store.SaveSettings(Data.Settings);
 }

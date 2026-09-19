@@ -2,7 +2,7 @@ using QuietRemind.Models;
 
 namespace QuietRemind.Services;
 
-/// <summary>关机前拦截提醒的欠账判定（需求 4.1）：今天还欠着（今天待提醒、未收尾、任务启用）、且关机后就提醒不到的任务实例。</summary>
+/// <summary>关机前拦截提醒的欠账判定（需求 4.1）：今天还欠着（今天待提醒或已错过、未收尾、任务启用）、且关机后就提醒不到的任务实例。</summary>
 public static class ShutdownIntercept
 {
     public static IReadOnlyList<Occurrence> GetOwedOccurrences(
@@ -10,7 +10,7 @@ public static class ShutdownIntercept
     {
         var enabledTaskIds = tasks.Where(t => t.Enabled).Select(t => t.Id).ToHashSet();
         return occurrences
-            .Where(o => o.State == OccurrenceState.Pending
+            .Where(o => o.State is OccurrenceState.Pending or OccurrenceState.Missed
                 && o.TriggerAt.Date == now.Date
                 && enabledTaskIds.Contains(o.TaskId))
             .ToList();

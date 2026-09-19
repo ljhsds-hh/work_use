@@ -9,10 +9,17 @@ public class ReminderEngineTests
     private readonly FakeClock _clock = new(new DateTime(2026, 9, 18, 10, 0, 0));
     private readonly ReminderEngine _engine;
     private readonly List<ReminderTask> _tasks = [];
+    private readonly List<Occurrence> _due = [];
+    private readonly List<Occurrence> _missed = [];
 
     public ReminderEngineTests()
     {
         _engine = new ReminderEngine(_clock);
+        _engine.RemindersDue += (due, missed) =>
+        {
+            _due.AddRange(due);
+            _missed.AddRange(missed);
+        };
         var task = new ReminderTask { Content = "测试任务", Time = new TimeSpan(16, 50, 0), RecurrenceType = RecurrenceType.Daily };
         _tasks.Add(task);
     }
@@ -29,14 +36,12 @@ public class ReminderEngineTests
     {
         var o = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
         var occs = new List<Occurrence> { o };
-        var due = new List<Occurrence>();
-        _engine.NormalRemindersDue += list => due.AddRange(list);
 
         _clock.Set(new DateTime(2026, 9, 18, 16, 50, 1));
         _engine.Poll(occs, _tasks);
 
-        Assert.Single(due);
-        Assert.Same(o, due[0]);
+        Assert.Single(_due);
+        Assert.Same(o, _due[0]);
         Assert.Equal(OccurrenceState.Pending, o.State);      // 弹出不改状态（需求 5.1.4）
         Assert.NotNull(o.ReminderShownAt);                  // 已弹标记
     }
@@ -46,15 +51,13 @@ public class ReminderEngineTests
     {
         var o = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
         var occs = new List<Occurrence> { o };
-        var due = new List<Occurrence>();
-        _engine.NormalRemindersDue += list => due.AddRange(list);
 
         _clock.Set(new DateTime(2026, 9, 18, 16, 50, 1));
         _engine.Poll(occs, _tasks);
         _clock.Advance(TimeSpan.FromSeconds(3));
         _engine.Poll(occs, _tasks);
 
-        Assert.Single(due); // 不重复
+        Assert.Single(_due); // 不重复
     }
 
     [Fact]
@@ -62,10 +65,6 @@ public class ReminderEngineTests
     {
         var o = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
         var occs = new List<Occurrence> { o };
-        var missed = new List<Occurrence>();
-        var normal = new List<Occurrence>();
-        _engine.MissedRemindersDue += list => missed.AddRange(list);
-        _engine.NormalRemindersDue += list => normal.AddRange(list);
 
         // 上一轮 16:49:58，本轮突然 16:50:04（轮询延迟 6s）
         _clock.Set(new DateTime(2026, 9, 18, 16, 49, 58));
@@ -73,8 +72,8 @@ public class ReminderEngineTests
         _clock.Set(new DateTime(2026, 9, 18, 16, 50, 4));
         _engine.Poll(occs, _tasks);
 
-        Assert.Empty(missed);                       // 运行期正常到点不判错过（需求 5.1.2 第一条）
-        Assert.Single(normal);
+        Assert.Empty(_missed);                      // 运行期正常到点不判错过（需求 5.1.2 第一条）
+        Assert.Single(_due);
     }
 
     [Fact]
@@ -83,15 +82,36 @@ public class ReminderEngineTests
         // 模拟昨天 16:50 的任务实例至今未收尾，今天开机
         var o = MakePending(new DateTime(2026, 9, 17, 16, 50, 0));
         var occs = new List<Occurrence> { o };
-        var missed = new List<Occurrence>();
-        _engine.MissedRemindersDue += list => missed.AddRange(list);
 
         _clock.Set(new DateTime(2026, 9, 18, 8, 0, 0));
         _engine.ScanMissed(occs, _tasks, _clock.Now);
 
-        Assert.Single(missed);
+        Assert.Single(_missed);
         Assert.Equal(OccurrenceState.Missed, o.State);
         Assert.NotNull(o.ReminderShownAt);
+    }
+
+    [Fact]
+    public void 已错过实例落盘后进程重启_再次扫描仍补提醒_无状态死角()
+    {
+        // 需求 5.1.4：判错过落盘后、补提醒窗口收尾前进程死亡 → 重启后必须再次补提醒
+        var o = MakePending(new DateTime(2026, 9, 17, 16, 50, 0));
+        var occs = new List<Occurrence> { o };
+
+        _clock.Set(new DateTime(2026, 9, 18, 8, 0, 0));
+        _engine.ScanMissed(occs, _tasks, _clock.Now);
+        Assert.Equal(OccurrenceState.Missed, o.State);
+
+        // 进程死亡 → 新引擎（runtimeShown 清空）重启扫描
+        var newEngine = new ReminderEngine(_clock);
+        var missedAgain = new List<Occurrence>();
+        newEngine.RemindersDue += (_, missed) => missedAgain.AddRange(missed);
+
+        _clock.Set(new DateTime(2026, 9, 18, 8, 5, 0));
+        newEngine.ScanMissed(occs, _tasks, _clock.Now);
+
+        Assert.Single(missedAgain);                 // 再次补提醒，不静默消失
+        Assert.Same(o, missedAgain[0]);
     }
 
     [Fact]
@@ -99,8 +119,6 @@ public class ReminderEngineTests
     {
         var o = MakePending(new DateTime(2026, 9, 18, 23, 30, 0));
         var occs = new List<Occurrence> { o };
-        var missed = new List<Occurrence>();
-        _engine.MissedRemindersDue += list => missed.AddRange(list);
 
         _clock.Set(new DateTime(2026, 9, 18, 22, 0, 0));
         _engine.Poll(occs, _tasks); // 睡前最后一轮
@@ -108,7 +126,7 @@ public class ReminderEngineTests
         _clock.Set(new DateTime(2026, 9, 19, 8, 0, 0)); // 唤醒
         _engine.ScanMissed(occs, _tasks, _clock.Now);
 
-        Assert.Single(missed);
+        Assert.Single(_missed);
         Assert.Equal(OccurrenceState.Missed, o.State);
     }
 
@@ -117,15 +135,13 @@ public class ReminderEngineTests
     {
         var o = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
         var occs = new List<Occurrence> { o };
-        var missed = new List<Occurrence>();
-        _engine.MissedRemindersDue += list => missed.AddRange(list);
 
         _clock.Set(new DateTime(2026, 9, 18, 16, 0, 0));
         _engine.Poll(occs, _tasks);
         _clock.Set(new DateTime(2026, 9, 18, 17, 0, 0)); // 时钟前跳 1 小时
         _engine.Poll(occs, _tasks);
 
-        Assert.Single(missed);
+        Assert.Single(_missed);
         Assert.Equal(OccurrenceState.Missed, o.State);
     }
 
@@ -134,10 +150,6 @@ public class ReminderEngineTests
     {
         var o = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
         var occs = new List<Occurrence> { o };
-        var missed = new List<Occurrence>();
-        var normal = new List<Occurrence>();
-        _engine.MissedRemindersDue += list => missed.AddRange(list);
-        _engine.NormalRemindersDue += list => normal.AddRange(list);
 
         _clock.Set(new DateTime(2026, 9, 18, 16, 50, 1));
         _engine.Poll(occs, _tasks);
@@ -146,8 +158,8 @@ public class ReminderEngineTests
         _clock.Set(new DateTime(2026, 9, 18, 16, 50, 2)); // 回到正常
         _engine.Poll(occs, _tasks);
 
-        Assert.Empty(missed);
-        Assert.Single(normal); // 只正常触发一次，不重复
+        Assert.Empty(_missed);
+        Assert.Single(_due); // 只正常触发一次，不重复
     }
 
     [Fact]
@@ -164,13 +176,30 @@ public class ReminderEngineTests
         // 进程被强杀 → 新引擎实例（runtimeShown 清空），下次启动扫描
         var newEngine = new ReminderEngine(_clock);
         var missed = new List<Occurrence>();
-        newEngine.MissedRemindersDue += list => missed.AddRange(list);
+        newEngine.RemindersDue += (_, list) => missed.AddRange(list);
 
         _clock.Set(new DateTime(2026, 9, 19, 8, 0, 0));
         newEngine.ScanMissed(occs, _tasks, _clock.Now);
 
         Assert.Single(missed);
         Assert.Equal(OccurrenceState.Missed, o.State); // 需求 5.1.4：无状态死角
+    }
+
+    [Fact]
+    public void 同一轮询内错过与到期实例_合并为一次事件()
+    {
+        // 需求 3.4：同一轮询周期到期的实例合并展示，不弹多个窗口
+        var missedOne = MakePending(new DateTime(2026, 9, 18, 16, 0, 0));  // 上轮已过点
+        var dueOne = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));    // 本轮新到点
+        var occs = new List<Occurrence> { missedOne, dueOne };
+
+        _clock.Set(new DateTime(2026, 9, 18, 16, 49, 58));
+        _engine.Poll(occs, _tasks);
+        _clock.Set(new DateTime(2026, 9, 18, 16, 50, 1));
+        _engine.Poll(occs, _tasks);
+
+        Assert.Single(_missed);
+        Assert.Single(_due); // 同轮两个列表分别非空 → App 侧合并一个窗口
     }
 
     [Fact]
@@ -215,12 +244,13 @@ public class ReminderEngineTests
         _clock.Set(new DateTime(2026, 9, 18, 17, 0, 1));
         _engine.Poll(occs, _tasks);
 
-        var normal = new List<Occurrence>();
-        _engine.NormalRemindersDue += list => normal.AddRange(list);
         _clock.Set(new DateTime(2026, 9, 18, 17, 0, 3));
         _engine.Poll(occs, _tasks);
 
-        Assert.Single(normal); // snooze 后按正常提醒再次触发，不判错过
+        // 首轮窗口触发 1 次 + snooze 后再触发 1 次；snooze 后那次不判错过（需求 3.3）
+        Assert.Equal(2, _due.Count);
+        Assert.Empty(_missed);
+        Assert.Equal(new DateTime(2026, 9, 18, 17, 0, 3), o.ReminderShownAt);
         Assert.Equal(OccurrenceState.Pending, o.State);
     }
 
@@ -235,7 +265,7 @@ public class ReminderEngineTests
 
         var newEngine = new ReminderEngine(_clock);
         var missed = new List<Occurrence>();
-        newEngine.MissedRemindersDue += list => missed.AddRange(list);
+        newEngine.RemindersDue += (_, list) => missed.AddRange(list);
 
         _clock.Set(new DateTime(2026, 9, 19, 8, 0, 0)); // 关机一夜后开机
         newEngine.ScanMissed(occs, _tasks, _clock.Now);
@@ -250,18 +280,14 @@ public class ReminderEngineTests
         _tasks[0].Enabled = false;
         var o = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
         var occs = new List<Occurrence> { o };
-        var due = new List<Occurrence>();
-        var missed = new List<Occurrence>();
-        _engine.NormalRemindersDue += list => due.AddRange(list);
-        _engine.MissedRemindersDue += list => missed.AddRange(list);
 
         _clock.Set(new DateTime(2026, 9, 18, 16, 50, 1));
         _engine.Poll(occs, _tasks);
         _clock.Set(new DateTime(2026, 9, 19, 8, 0, 0));
         _engine.ScanMissed(occs, _tasks, _clock.Now);
 
-        Assert.Empty(due);
-        Assert.Empty(missed);
+        Assert.Empty(_due);
+        Assert.Empty(_missed);
         Assert.Equal(OccurrenceState.Pending, o.State);
     }
 
@@ -271,12 +297,10 @@ public class ReminderEngineTests
         var o1 = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
         var o2 = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
         var occs = new List<Occurrence> { o1, o2 };
-        var due = new List<Occurrence>();
-        _engine.NormalRemindersDue += list => due.AddRange(list);
 
         _clock.Set(new DateTime(2026, 9, 18, 16, 50, 1));
         _engine.Poll(occs, _tasks);
 
-        Assert.Equal(2, due.Count);
+        Assert.Equal(2, _due.Count);
     }
 }

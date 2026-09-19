@@ -30,7 +30,6 @@ public sealed class TaskEditorViewModel : ViewModelBase
                 _weekDays[(int)day] = true;
             }
         }
-        SaveCommand = new RelayCommand(() => Save());
     }
 
     public string Content
@@ -101,12 +100,11 @@ public sealed class TaskEditorViewModel : ViewModelBase
     public bool Sat { get => _weekDays[6]; set { _weekDays[6] = value; OnPropertyChanged(); } }
     public bool Sun { get => _weekDays[0]; set { _weekDays[0] = value; OnPropertyChanged(); } }
 
-    public RelayCommand SaveCommand { get; }
-
     /// <summary>表单保存结果（校验通过才置位），由 View 层判断并关闭窗口。</summary>
     public ReminderTask? SavedTask { get; private set; }
 
-    private void Save()
+    /// <summary>校验并构建任务结果；校验失败时写入 ErrorText。</summary>
+    public void Save()
     {
         if (string.IsNullOrWhiteSpace(Content))
         {
@@ -125,6 +123,10 @@ public sealed class TaskEditorViewModel : ViewModelBase
         }
 
         var task = _existing ?? new ReminderTask();
+        if (_existing is null)
+        {
+            task.CreatedAt = DateTime.Now;
+        }
         task.Content = Content.Trim();
         task.Time = SelectedTime is { } t ? new TimeSpan(t.Hour, t.Minute, 0) : new TimeSpan(9, 0, 0);
         task.RecurrenceType = Recurrence;

@@ -18,46 +18,83 @@ public partial class App : Application
     private Hardcodet.Wpf.TaskbarNotification.TaskbarIcon? _tray;
     private DispatcherTimer? _pollTimer;
     private MainWindow? _mainWindow;
+    private DateOnly _lastPlanDate;
+
+    private const string LogDir = @"D:\logs\QuietRemind";
 
     private static string DataDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "QuietRemind");
+
+    private static string NsFilePath => Path.Combine(LogDir, "mutex.ns");
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+        try
+        {
+            StartupCore(e);
+        }
+        catch (Exception ex)
+        {
+            // 启动失败必须退出：全局异常处理器会 Handled 掉异常导致"无窗口无托盘的僵尸进程"，
+            // 提醒机制静默死亡（需求 9.3）。此处显式提示并终止。
+            try
+            {
+                Directory.CreateDirectory(LogDir);
+                File.AppendAllText(Path.Combine(LogDir, $"startup-error-{DateTime.Now:yyyy-MM-dd}.log"),
+                    $"[{DateTime.Now:HH:mm:ss}] 启动失败：{ex}\n");
+            }
+            catch (IOException)
+            {
+                // 日志目录不可用时忽略
+            }
+            MessageBox.Show($"QuietRemind 启动失败，程序将退出。\n\n{ex.Message}", "QuietRemind",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(-1);
+        }
+    }
+
+    private void StartupCore(StartupEventArgs e)
+    {
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
 
+        var isScheduled = e.Args.Contains(TaskSchedulerGuard.ScheduledArg);
+
         // 单实例（需求 7.3）：已有实例时，手动启动唤起主界面，守护触发静默退出
-        _singleInstance = new SingleInstance();
+        _singleInstance = new SingleInstance(NsFilePath);
         if (!_singleInstance.IsPrimary)
         {
-            if (!e.Args.Contains(TaskSchedulerGuard.ScheduledArg))
+            if (!isScheduled)
             {
-                SingleInstance.SignalShowMain();
+                SingleInstance.SignalShowMain(NsFilePath);
             }
             Shutdown();
             return;
         }
 
-        var log = new LogService(@"D:\logs\QuietRemind");
+        var log = new LogService(LogDir);
         log.Info($"QuietRemind 启动，参数：[{string.Join(" ", e.Args)}]");
 
-        var store = new JsonStore(DataDir);
-        AppData data;
-        try
+        // 退出标记存放日志目录：该目录在用户会话进程与计划任务守护进程间文件视图一致
+        // （部分环境对 %AppData% 新写入文件存在进程视图隔离，见 JsonStore 注释）
+        var store = new JsonStore(DataDir, Path.Combine(LogDir, "exit.marker"));
+        var load = store.Load();
+        var data = load.Data;
+        if (load.Problems.Count > 0)
         {
-            data = store.Load();
+            // 损坏/读取失败按域隔离：仅提示受影响文件，其余数据照常使用
+            log.Error($"数据加载异常：{string.Join("；", load.Problems)}");
+            if (!isScheduled)
+            {
+                MessageBox.Show(
+                    $"部分数据文件加载异常，本次会话不会覆写这些文件（磁盘现场已保留）。\n\n{string.Join("\n", load.Problems)}",
+                    "QuietRemind", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
-        catch (InvalidDataException ex)
-        {
-            log.Error("数据文件损坏，按空数据启动", ex);
-            MessageBox.Show($"数据文件损坏，损坏文件已备份，本次以空数据启动。\n\n{ex.Message}",
-                "QuietRemind", MessageBoxButton.OK, MessageBoxImage.Warning);
-            data = new AppData();
-        }
+        log.Info($"数据目录：{DataDir}，退出标记存在：{store.HasExitMarker()}");
 
         var clock = SystemClock.Instance;
         var engine = new ReminderEngine(clock);
@@ -74,9 +111,10 @@ public partial class App : Application
             Guard = guard,
         };
 
-        // 退出标记（需求 7.2 / 7.4）：守护触发遇标记不拉起；登录/手动启动清除标记
-        var isScheduled = e.Args.Contains(TaskSchedulerGuard.ScheduledArg);
-        var isLoginStartup = isScheduled && IsRecentBootStartup();
+        // 退出标记（需求 7.2 / 7.4）：守护语义遇标记不拉起；登录/手动语义清除标记。
+        // 登录语义 = 本次开机周期内第一次计划任务启动（boot.marker 记录上次处理时刻，
+        // 以系统启动时间为界；用户在实例运行后的退出写入标记，由后续守护语义尊重）。
+        var isLoginStartup = isScheduled && MarkBootLoginIfNeeded();
         if (store.HasExitMarker())
         {
             if (isScheduled && !isLoginStartup)
@@ -95,17 +133,24 @@ public partial class App : Application
             log.Warn("计划任务注册失败，本次运行不受影响");
         }
 
-        // 提醒事件 → 弹窗
-        engine.NormalRemindersDue += occs => ShowReminder(occs, missed: false);
-        engine.MissedRemindersDue += occs => ShowReminder(occs, missed: true);
+        // 提醒事件 → 弹窗；错过判定实时落盘（需求 8.2：错过判定属状态变更）
+        engine.RemindersDue += (due, missed) =>
+        {
+            if (missed.Count > 0)
+            {
+                _services.PersistOccurrences();
+            }
+            ShowReminder(due, missed);
+        };
 
         // 系统事件（需求 4 章关机拦截 / 5 章睡眠错过）
         SessionEnding += OnSessionEnding;
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
-        // 启动序列：补生成实例 → 错过扫描（需求 5.2）
+        // 启动序列：补生成实例 → 落盘 → 错过扫描（需求 5.2）
+        _lastPlanDate = DateOnly.FromDateTime(clock.Now);
         planner.EnsureUpTo(data.Occurrences, data.Tasks);
-        store.SaveOccurrences(data.Occurrences);
+        _services.PersistOccurrences();
         engine.ScanMissed(data.Occurrences, data.Tasks, clock.Now);
         log.Info($"启动完成：任务 {data.Tasks.Count} 条，实例 {data.Occurrences.Count} 条");
 
@@ -113,9 +158,6 @@ public partial class App : Application
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _pollTimer.Tick += OnPollTick;
         _pollTimer.Start();
-
-        // 单实例唤醒监听：重复手动启动时弹出主界面
-        _singleInstance.StartShowMainWatcher(() => Dispatcher.Invoke(ShowMainWindow));
 
         // 托盘（需求 6.2）
         CreateTray();
@@ -134,21 +176,34 @@ public partial class App : Application
             return;
         }
         var data = _services.Data;
-        var added = _services.Planner.EnsureUpTo(data.Occurrences, data.Tasks);
-        if (added > 0)
+        // 实例补齐仅在跨天时执行（新增实例只可能出现在新的一天；任务增删改路径已显式重建）
+        var today = DateOnly.FromDateTime(_services.Clock.Now);
+        if (today != _lastPlanDate)
         {
-            _services.Persist();
+            var added = _services.Planner.EnsureUpTo(data.Occurrences, data.Tasks);
+            if (added > 0)
+            {
+                _services.PersistOccurrences();
+            }
+            _lastPlanDate = today;
         }
         _services.Engine.Poll(data.Occurrences, data.Tasks);
+
+        // 单实例唤醒检查：重复手动启动时弹出主界面（并入 1s 轮询，无常驻后台线程）
+        if (_singleInstance?.TryConsumeShowMainSignal() == true)
+        {
+            ShowMainWindow();
+        }
     }
 
-    private void ShowReminder(IReadOnlyList<Occurrence> occs, bool missed)
+    private void ShowReminder(IReadOnlyList<Occurrence> due, IReadOnlyList<Occurrence> missed)
     {
         if (_services is null)
         {
             return;
         }
-        var entries = occs
+        // 到期与错过实例合并进同一个全屏提醒窗口，逐条带各自徽标（需求 3.4.1）
+        var entries = due.Concat(missed)
             .Select(o => (Task: _services.Data.Tasks.FirstOrDefault(t => t.Id == o.TaskId), Occ: o))
             .Where(x => x.Task is not null)
             .Select(x => (x.Task!, x.Occ))
@@ -158,7 +213,7 @@ public partial class App : Application
             return;
         }
 
-        _services.Log.Info($"{(missed ? "错过补提醒" : "到点提醒")}：{entries.Count} 条");
+        _services.Log.Info($"提醒展示：到期 {due.Count} 条，错过 {missed.Count} 条");
         var vm = new ReminderWindowViewModel(_services, entries);
         var win = new ReminderWindow(vm);
         win.Show();
@@ -201,12 +256,42 @@ public partial class App : Application
 
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
     {
+        // SystemEvents 在专用后台线程触发：必须封送回 UI 线程，避免与轮询并发读写共享状态
         if (_services is null || e.Mode != PowerModes.Resume)
         {
             return;
         }
-        _services.Log.Info("系统从睡眠/休眠唤醒，执行错过扫描");
-        _services.Engine.ScanMissed(_services.Data.Occurrences, _services.Data.Tasks, _services.Clock.Now);
+        Dispatcher.Invoke(() =>
+        {
+            _services.Log.Info("系统从睡眠/休眠唤醒，执行错过扫描");
+            _services.Engine.ScanMissed(_services.Data.Occurrences, _services.Data.Tasks, _services.Clock.Now);
+        });
+    }
+
+    /// <summary>
+    /// 登录语义判定与登记：本次开机周期内（系统启动时间晚于上次登记时刻）的第一次计划任务启动
+    /// 视为登录触发（等价开机自启，需求 7.4.3），登记后本开机周期内的后续触发均为守护语义。
+    /// </summary>
+    private static bool MarkBootLoginIfNeeded()
+    {
+        try
+        {
+            var boot = DateTime.Now - TimeSpan.FromMilliseconds(Environment.TickCount64);
+            var flagPath = Path.Combine(LogDir, "boot.marker");
+            var last = File.Exists(flagPath) ? DateTime.Parse(File.ReadAllText(flagPath)) : DateTime.MinValue;
+            if (last >= boot)
+            {
+                return false; // 本开机周期已处理过登录语义
+            }
+            Directory.CreateDirectory(LogDir);
+            File.WriteAllText(flagPath, DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"));
+            return true;
+        }
+        catch (Exception)
+        {
+            // 判定失败时按登录语义处理（宁可多拉起，不可漏提醒，需求 1.2.1）
+            return true;
+        }
     }
 
     private void CreateTray()
@@ -265,9 +350,17 @@ public partial class App : Application
             return;
         }
 
-        // 写入用户主动退出标记后退出（需求 7.4）
-        _services.Store.WriteExitMarker();
-        _services.Log.Info("用户确认退出，已写入主动退出标记");
+        try
+        {
+            // 写入用户主动退出标记后退出（需求 7.4）
+            _services.Store.WriteExitMarker();
+            _services.Log.Info("用户确认退出，已写入主动退出标记");
+        }
+        catch (Exception ex)
+        {
+            // 标记写入失败也必须允许退出，否则用户点退出无响应（需求 9.3）
+            _services.Log.Error("退出标记写入失败", ex);
+        }
         ExitApplication();
     }
 
@@ -275,27 +368,12 @@ public partial class App : Application
     {
         _pollTimer?.Stop();
         _tray?.Dispose();
-        _singleInstance?.Dispose();
         if (_services is not null)
         {
             _services.Log.Info("QuietRemind 退出");
             _services.Log.Dispose();
         }
         Shutdown();
-    }
-
-    private static bool IsRecentBootStartup()
-    {
-        // 登录触发发生在系统刚启动的 2 分钟内；守护触发在任意时刻
-        try
-        {
-            var boot = DateTime.Now - TimeSpan.FromMilliseconds(Environment.TickCount64);
-            return (DateTime.Now - boot).TotalMinutes < 2;
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

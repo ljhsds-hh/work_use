@@ -26,7 +26,7 @@ public partial class TaskEditorWindow : HandyControl.Controls.Window
 
     private void OnSave(object sender, RoutedEventArgs e)
     {
-        _vm.SaveCommand.Execute(null);
+        _vm.Save();
         if (_vm.SavedTask is not null)
         {
             DialogResult = true;

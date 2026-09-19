@@ -46,7 +46,7 @@ public partial class MainWindow : HandyControl.Controls.Window
     private void ConfirmDelete(ReminderTask task)
     {
         var result = MessageBox.Show(
-            $"确认删除任务「{task.Content}」？\n删除后不再提醒，已产生的提醒记录一并清除。",
+            $"确认删除任务「{task.Content}」？\n删除后不再提醒；已产生的历史记录将保留供查询。",
             "删除确认",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
@@ -55,10 +55,11 @@ public partial class MainWindow : HandyControl.Controls.Window
             return;
         }
 
+        // 需求 2.3.3 / 8.3：删除任务不追溯、不清除历史实例记录，仅停止参与提醒
+        //（引擎按"任务列表中不存在"自然过滤其全部实例）
         _services.Data.Tasks.Remove(task);
-        OccurrencePlanner.RemoveTask(_services.Data.Occurrences, task.Id);
         _services.Persist();
-        _services.Log.Info($"删除任务：{task.Content}");
+        _services.Log.Info($"删除任务：{task.Content}（历史实例保留）");
         _vm.Refresh();
     }
 

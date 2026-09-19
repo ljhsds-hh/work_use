@@ -71,6 +71,17 @@ public class ShutdownInterceptTests
     }
 
     [Fact]
+    public void 今天已错过未收尾_拦截()
+    {
+        var t = AddTask();
+        _tasks.Add(t);
+        AddOccurrence(t.Id, new DateTime(2026, 9, 18, 16, 50, 0), OccurrenceState.Missed);
+
+        var owed = ShutdownIntercept.GetOwedOccurrences(_now, _tasks, _occs);
+        Assert.Single(owed); // 需求 4.1"已到但未收尾"含已错过未处理的实例
+    }
+
+    [Fact]
     public void 停用任务_不拦截()
     {
         var t = AddTask(enabled: false);

@@ -36,7 +36,16 @@ public sealed class MainViewModel : ViewModelBase
         set
         {
             _services.Data.Settings.GuardEnabled = value;
-            _services.Persist();
+            // 需求 6.3：关闭即注销计划任务，不再自启、不再守护；开启则（重新）注册
+            if (value)
+            {
+                _services.Guard.EnsureRegistered();
+            }
+            else
+            {
+                _services.Guard.Unregister();
+            }
+            _services.PersistSettings();
             OnPropertyChanged();
         }
     }
@@ -69,7 +78,7 @@ public sealed class MainViewModel : ViewModelBase
         {
             minutes[index] = Math.Clamp(value, 1, 120);
         }
-        _services.Persist();
+        _services.PersistSettings();
         OnPropertyChanged();
     }
 
@@ -82,7 +91,7 @@ public sealed class MainViewModel : ViewModelBase
         Tasks.Clear();
         foreach (var task in _services.Data.Tasks)
         {
-            var row = new TaskRowViewModel(task, _services.Persist, t => EditRequested?.Invoke(t), t => DeleteRequested?.Invoke(t));
+            var row = new TaskRowViewModel(task, OnTaskToggled, t => EditRequested?.Invoke(t), t => DeleteRequested?.Invoke(t));
             var taskOccs = _services.Data.Occurrences.Where(o => o.TaskId == task.Id).ToList();
             row.IsTodayDue = taskOccs.Any(o => DateOnly.FromDateTime(o.TriggerAt) == today
                 && o.State is OccurrenceState.Pending or OccurrenceState.Missed);
@@ -94,4 +103,12 @@ public sealed class MainViewModel : ViewModelBase
     }
 
     private void OnAdd() => AddRequested?.Invoke();
+
+    /// <summary>启用/停用切换后：补生成（启用）实例并按域落盘。</summary>
+    private void OnTaskToggled()
+    {
+        _services.Planner.EnsureUpTo(_services.Data.Occurrences, _services.Data.Tasks);
+        _services.PersistTasks();
+        _services.PersistOccurrences();
+    }
 }

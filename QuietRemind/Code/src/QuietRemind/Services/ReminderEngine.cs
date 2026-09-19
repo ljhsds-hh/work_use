@@ -12,7 +12,7 @@ public enum SettleAction
 /// <summary>
 /// 提醒引擎：秒级轮询触发 + 错过扫描（需求 3.1 / 5.1）。
 /// 判定基于"上次轮询时刻 _lastPoll"：
-///   - 错过扫描：TriggerAt 早于上次轮询且早于当前 → 判错过（进程未运行/睡眠/时钟跳变期间到点）
+///   - 错过扫描：TriggerAt 早于上次轮询且早于当前 → 判错过（进程未运行/睡眠/时钟跳变期间到点；含已判错过未收尾的实例——补提醒弹窗期间进程死亡的场景，重启后仍覆盖）
 ///   - 触发判定：TriggerAt 落在 (上次轮询, 当前] → 正常到点提醒
 /// 时钟向前大跳（&gt;10s 且非睡眠）时整段过点实例按错过兜底（需求 5.1.2 第二条）。
 /// 运行期内存态 _runtimeShown 记录"本次进程已弹过窗"的实例：进程重启即失效，
@@ -33,18 +33,19 @@ public class ReminderEngine
 
     public ReminderEngine(IClock clock) => _clock = clock;
 
-    /// <summary>正常到点提醒（无"已错过"徽标）。</summary>
-    public event Action<IReadOnlyList<Occurrence>>? NormalRemindersDue;
-
-    /// <summary>错过补提醒（带"已错过"徽标）。</summary>
-    public event Action<IReadOnlyList<Occurrence>>? MissedRemindersDue;
-
-    public IReadOnlyCollection<Guid> RuntimeShown => _runtimeShown;
+    /// <summary>
+    /// 提醒到期（同轮询周期的正常到点与错过实例合并为一次事件、一个提醒窗口，需求 3.4）。
+    /// missed 列表内的实例已置为 Missed 状态，UI 以"已错过"徽标展示。
+    /// </summary>
+    public event Action<IReadOnlyList<Occurrence>, IReadOnlyList<Occurrence>>? RemindersDue;
 
     /// <summary>单次轮询：先错过扫描（过点未弹），再触发判定（本轮新到点）。停用任务的实例不参与（需求 2.3.4）。</summary>
     public void Poll(List<Occurrence> occurrences, IReadOnlyList<ReminderTask> tasks)
     {
         var now = _clock.Now;
+        var enabledIds = BuildEnabledIds(tasks);
+        var missed = new List<Occurrence>();
+        var due = new List<Occurrence>();
 
         if (_lastPoll == DateTime.MinValue)
         {
@@ -54,62 +55,83 @@ public class ReminderEngine
 
         if ((now - _lastPoll).TotalSeconds > ClockJumpThresholdSeconds)
         {
-            // 首轮或时钟向前大跳：整段过点实例全部按错过兜底
-            ScanMissed(occurrences, tasks, now, cutoff: now);
+            // 时钟向前大跳：整段过点实例全部按错过兜底
+            ScanMissedCore(occurrences, enabledIds, missed, now, now);
         }
         else
         {
             // 常规轮询：上次轮询之前已到点的（防御性兜底）判错过
-            ScanMissed(occurrences, tasks, now, cutoff: _lastPoll);
+            ScanMissedCore(occurrences, enabledIds, missed, now, _lastPoll);
 
             // 本轮新到点 → 正常触发（不改 State，仅记录弹窗）
-            var due = occurrences
-                .Where(o => IsEligible(o, tasks)
+            due.AddRange(occurrences
+                .Where(o => IsEligible(o, enabledIds)
                     && o.TriggerAt <= now
-                    && o.TriggerAt > _lastPoll)
-                .ToList();
-            if (due.Count > 0)
+                    && o.TriggerAt > _lastPoll));
+            foreach (var o in due)
             {
-                foreach (var o in due)
-                {
-                    o.ReminderShownAt = now;
-                    _runtimeShown.Add(o.Id);
-                }
-                NormalRemindersDue?.Invoke(due);
+                o.ReminderShownAt = now;
+                _runtimeShown.Add(o.Id);
             }
+        }
+
+        // 到期与错过合并为一次事件、一个提醒窗口（需求 3.4）
+        if (missed.Count > 0 || due.Count > 0)
+        {
+            RemindersDue?.Invoke(due, missed);
         }
 
         _lastPoll = now;
     }
 
-    /// <summary>错过扫描（启动 / 睡眠唤醒 / 时钟跳变后显式调用）：cutoff 之前到点且未弹过的 Pending 实例全部判错过。</summary>
+    /// <summary>
+    /// 错过扫描（启动 / 睡眠唤醒 / 时钟跳变后显式调用）：cutoff 之前到点且未弹过的待提醒实例全部判错过；
+    /// cutoff 省略时以当前时刻为界。
+    /// </summary>
     public void ScanMissed(List<Occurrence> occurrences, IReadOnlyList<ReminderTask> tasks, DateTime now, DateTime? cutoff = null)
     {
-        var cut = cutoff ?? now;
-        var missed = occurrences
-            .Where(o => IsEligible(o, tasks)
-                && o.TriggerAt <= cut
+        var missed = new List<Occurrence>();
+        ScanMissedCore(occurrences, BuildEnabledIds(tasks), missed, now, cutoff ?? now);
+        if (missed.Count > 0)
+        {
+            RemindersDue?.Invoke([], missed);
+        }
+    }
+
+    /// <summary>
+    /// 错过扫描核心：cutoff 之前到点且未弹过的待提醒实例判错过。
+    /// 条件含 Missed 状态——已判错过但未收尾的实例（如补提醒弹窗期间进程死亡）在下次启动仍会被再次补提醒，
+    /// 确保无状态死角（需求 5.1.4 / 1.2.1）。
+    /// </summary>
+    private void ScanMissedCore(List<Occurrence> occurrences, HashSet<Guid> enabledIds, List<Occurrence> missed, DateTime now, DateTime cutoff)
+    {
+        var found = occurrences
+            .Where(o => IsEligible(o, enabledIds)
+                && o.TriggerAt <= cutoff
                 && o.TriggerAt < now)
             .ToList();
-        if (missed.Count == 0)
+        if (found.Count == 0)
         {
             return;
         }
 
-        foreach (var o in missed)
+        foreach (var o in found)
         {
             o.State = OccurrenceState.Missed;
             o.ReminderShownAt = now;
             _runtimeShown.Add(o.Id);
+            missed.Add(o);
         }
-        MissedRemindersDue?.Invoke(missed);
     }
 
-    private bool IsEligible(Occurrence o, IReadOnlyList<ReminderTask> tasks)
+    private static HashSet<Guid> BuildEnabledIds(IReadOnlyList<ReminderTask> tasks)
+        => tasks.Where(t => t.Enabled).Select(t => t.Id).ToHashSet();
+
+    private bool IsEligible(Occurrence o, HashSet<Guid> enabledIds)
     {
-        return o.State == OccurrenceState.Pending
+        return o.State is OccurrenceState.Pending or OccurrenceState.Missed
             && !_runtimeShown.Contains(o.Id)
-            && tasks.Any(t => t.Id == o.TaskId && t.Enabled);
+            && enabledIds.Contains(o.TaskId);
     }
 
     /// <summary>收尾（需求 3.3）：完成/跳过 → 终态；稍后再提醒 → 推迟触发回待提醒。</summary>

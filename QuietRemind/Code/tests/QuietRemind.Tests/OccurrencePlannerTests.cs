@@ -191,13 +191,45 @@ public class OccurrencePlannerTests
     }
 
     [Fact]
-    public void 删除任务_清理全部实例()
+    public void 编辑任务_正在稍后再提醒的实例保留_不丢推迟时刻()
     {
         var task = Daily();
         var occs = new List<Occurrence>();
         _planner.EnsureUpTo(occs, [task]);
 
-        OccurrencePlanner.RemoveTask(occs, task.Id);
-        Assert.Empty(occs);
+        // 模拟今天实例已弹并 snooze：回 Pending、ReminderShownAt 清空、TriggerAt 推迟
+        occs[0].State = OccurrenceState.Pending;
+        occs[0].ReminderShownAt = null;
+        occs[0].TriggerAt = _clock.Now.AddMinutes(10); // 推迟（≠ OriginalTriggerAt）
+
+        // 用户此时编辑任务（仅改文案）
+        task.Content = "改个名字";
+        _planner.RebuildFuture(occs, task);
+
+        // snooze 实例保留，推迟时刻不丢（需求 3.3 / 1.2.1）
+        var snoozed = Assert.Single(occs, o => o.TriggerAt != o.OriginalTriggerAt);
+        Assert.Equal(OccurrenceState.Pending, snoozed.State);
+    }
+
+    [Fact]
+    public void 删除任务_历史实例保留_引擎按任务缺失过滤()
+    {
+        // 需求 2.3.3 / 8.3：删除任务不清除历史实例记录，仅停止参与提醒
+        var task = Daily();
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task]);
+        occs[0].State = OccurrenceState.Completed; // 历史
+
+        // 模拟删除：任务从 tasks 列表移除，实例保留
+        var tasksAfterDelete = new List<ReminderTask>();
+        var engine = new ReminderEngine(_clock);
+        var due = new List<Occurrence>();
+        engine.RemindersDue += (d, _) => due.AddRange(d);
+
+        _clock.Set(new DateTime(2026, 9, 18, 16, 50, 1));
+        engine.Poll(occs, tasksAfterDelete);
+
+        Assert.Equal(7, occs.Count); // 实例全部保留
+        Assert.Empty(due);           // 但不再触发提醒
     }
 }

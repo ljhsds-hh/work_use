@@ -26,8 +26,19 @@ public sealed class LogService : IDisposable
 
     public LogService(string directory)
     {
-        _dir = directory;
-        Directory.CreateDirectory(_dir);
+        try
+        {
+            _dir = directory;
+            Directory.CreateDirectory(_dir);
+        }
+        catch (Exception)
+        {
+            // 主日志目录不可用（如无 D 盘）：回退到用户数据目录下的 logs，日志功能不可静默失效
+            _dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "QuietRemind", "logs");
+            Directory.CreateDirectory(_dir);
+        }
     }
 
     public void Info(string message) => Write(LogLevel.Info, message);
