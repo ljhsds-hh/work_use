@@ -30,6 +30,9 @@ public sealed class ReminderWindowViewModel : ViewModelBase
     /// <summary>头部展示的计划时刻：最早一条未处理提醒的 HH:mm。</summary>
     public string HeaderTime { get; }
 
+    /// <summary>设置访问（提醒窗应用背景/暗化/模糊配置）。</summary>
+    public AppSettings Settings => _services.Data.Settings;
+
     /// <summary>全部条目收尾完成，窗口应关闭。</summary>
     public event Action? AllSettled;
 

@@ -12,6 +12,8 @@ public sealed class AppServices
     public required OccurrencePlanner Planner { get; init; }
     public required LogService Log { get; init; }
     public required TaskSchedulerGuard Guard { get; init; }
+    /// <summary>数据目录（%AppData%\QuietRemind），供背景图等资源文件存放。</summary>
+    public required string DataDir { get; init; }
 
     /// <summary>全部数据落盘（任务结构变更时使用）。</summary>
     public void Persist()

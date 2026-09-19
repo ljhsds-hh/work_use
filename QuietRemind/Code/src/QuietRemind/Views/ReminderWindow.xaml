@@ -5,7 +5,7 @@
         WindowStyle="None" ResizeMode="NoResize"
         WindowState="Maximized"
         Topmost="True" ShowInTaskbar="False" ShowActivated="True"
-        Background="Transparent"
+        Background="#101018"
         Foreground="#0F172A"
         FontFamily="Microsoft YaHei UI, Segoe UI"
         KeyDown="OnKeyDown">
@@ -14,8 +14,12 @@
                       CornerRadius="0" UseAeroCaptionButtons="False" />
     </WindowChrome.WindowChrome>
 
-    <!-- 全屏暗化遮罩（阻断对桌面的注意力） + 居中提醒卡片 -->
-    <Grid Background="#AA101018">
+    <!-- 全屏遮罩：自定义背景图（可模糊）或深色底 + 可调暗化层 + 居中提醒卡片 -->
+    <Grid>
+        <Image x:Name="BackdropImage" Stretch="UniformToFill" Visibility="Collapsed" />
+
+        <Border x:Name="DimLayer" Background="#101018" />
+
         <Grid VerticalAlignment="Center" HorizontalAlignment="Center" RenderTransformOrigin="0.5,0.5">
             <Grid.RenderTransform>
                 <TranslateTransform x:Name="FloatTransform" Y="16" />

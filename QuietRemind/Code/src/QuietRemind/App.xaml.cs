@@ -109,6 +109,7 @@ public partial class App : Application
             Planner = planner,
             Log = log,
             Guard = guard,
+            DataDir = DataDir,
         };
 
         // 退出标记（需求 7.2 / 7.4）：守护语义遇标记不拉起；登录/手动语义清除标记。

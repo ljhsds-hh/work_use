@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Windows;
 using QuietRemind.Helpers;
 using QuietRemind.Models;
 using QuietRemind.Services;
@@ -14,6 +16,8 @@ public sealed class MainViewModel : ViewModelBase
     {
         _services = services;
         AddCommand = new RelayCommand(OnAdd);
+        PickImageCommand = new RelayCommand(OnPickImage);
+        ClearImageCommand = new RelayCommand(OnClearImage);
         Refresh();
     }
 
@@ -97,6 +101,101 @@ public sealed class MainViewModel : ViewModelBase
         _services.PersistSettings();
         OnPropertyChanged();
     }
+
+    /// <summary>提醒遮罩暗化不透明度（0~90%）。</summary>
+    public int ReminderDimPercent
+    {
+        get => _services.Data.Settings.ReminderDimPercent;
+        set
+        {
+            _services.Data.Settings.ReminderDimPercent = Math.Clamp(value, 0, 90);
+            _services.PersistSettings();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>背景图片模糊半径（0~40px）。</summary>
+    public int ReminderBlurRadius
+    {
+        get => _services.Data.Settings.ReminderBlurRadius;
+        set
+        {
+            _services.Data.Settings.ReminderBlurRadius = Math.Clamp(value, 0, 40);
+            _services.PersistSettings();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>已设置的背景图展示名（未设置为提示文字）。</summary>
+    public string ReminderImageText =>
+        string.IsNullOrEmpty(_services.Data.Settings.ReminderImagePath)
+            ? "未设置（使用默认深色底）"
+            : Path.GetFileName(_services.Data.Settings.ReminderImagePath);
+
+    public RelayCommand PickImageCommand { get; }
+    public RelayCommand ClearImageCommand { get; }
+
+    private void OnPickImage()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "选择提醒背景图片",
+            Filter = "图片文件 (*.jpg;*.jpeg;*.png;*.bmp)|*.jpg;*.jpeg;*.png;*.bmp",
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            // 拷贝到数据目录统一管理，避免源文件移动/删除后背景失效
+            var ext = Path.GetExtension(dialog.FileName).ToLowerInvariant();
+            var target = Path.Combine(_services.DataDir, $"reminder-bg{ext}");
+            foreach (var stale in Directory.GetFiles(_services.DataDir, "reminder-bg.*"))
+            {
+                if (!string.Equals(stale, target, StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Delete(stale);
+                }
+            }
+            File.Copy(dialog.FileName, target, overwrite: true);
+            _services.Data.Settings.ReminderImagePath = target;
+            _services.PersistSettings();
+            _services.Log.Info($"提醒背景图已设置：{target}");
+        }
+        catch (Exception ex)
+        {
+            _services.Log.Error("背景图设置失败", ex);
+            System.Windows.MessageBox.Show($"背景图设置失败：{ex.Message}", "QuietRemind",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        OnPropertyChanged(nameof(ReminderImageText));
+        OnPropertyChanged(nameof(HasCustomImage));
+    }
+
+    private void OnClearImage()
+    {
+        try
+        {
+            var path = _services.Data.Settings.ReminderImagePath;
+            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (IOException)
+        {
+            // 删除失败不影响清除设置
+        }
+        _services.Data.Settings.ReminderImagePath = null;
+        _services.PersistSettings();
+        _services.Log.Info("提醒背景图已清除");
+        OnPropertyChanged(nameof(ReminderImageText));
+        OnPropertyChanged(nameof(HasCustomImage));
+    }
+
+    public bool HasCustomImage => !string.IsNullOrEmpty(_services.Data.Settings.ReminderImagePath);
 
     /// <summary>数据变更后重建任务行并刷新派生状态。</summary>
     public void Refresh()
