@@ -174,4 +174,61 @@ public class StaticSafetyTests
         Assert.True(Directory.Exists(CoreSourceRoot));
         Assert.NotEmpty(ReadCoreSources());
     }
+
+    /// <summary>界面工程源码目录（与内核同级）。</summary>
+    private static string AppSourceRoot =>
+        Path.Combine(Directory.GetParent(CoreSourceRoot)!.FullName, "SpaceMaid.App");
+
+    private static IReadOnlyList<(string File, string Text)> ReadAppSources() =>
+        Directory
+            .EnumerateFiles(AppSourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+                           && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Select(path => (Path.GetRelativePath(AppSourceRoot, path), File.ReadAllText(path)))
+            .ToList();
+
+    [Fact]
+    public void App_should_not_contain_delete_calls()
+    {
+        // 界面层永远不删任何东西：它只能请求内核去"隔离"。
+        // 这条守卫的意义是：以后有人在 ViewModel 里图省事写一句 File.Delete，会立刻变红。
+        var offenders = new List<string>();
+
+        foreach (var (file, text) in ReadAppSources())
+        {
+            if (text.Contains("File.Delete(", StringComparison.Ordinal)
+                || text.Contains("Directory.Delete(", StringComparison.Ordinal)
+                || text.Contains(".TryDeleteFile(", StringComparison.Ordinal))
+            {
+                offenders.Add(file);
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "界面层出现了删除调用（界面只能请求内核隔离，不能自己删）：" + string.Join("；", offenders));
+    }
+
+    [Fact]
+    public void App_should_not_offer_bypass_switches_or_reset_base()
+    {
+        var forbidden = new[]
+        {
+            "SkipConfirm", "NoConfirm", "ForceClean", "ForceDelete", "BypassSafety", "IgnoreDenylist", "AllowDenied", "ResetBase"
+        };
+
+        foreach (var (file, text) in ReadAppSources())
+        {
+            foreach (var token in forbidden)
+            {
+                Assert.DoesNotContain(token, text, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+    }
+
+    [Fact]
+    public void App_source_root_should_be_discovered()
+    {
+        Assert.True(Directory.Exists(AppSourceRoot), $"找不到界面源码目录：{AppSourceRoot}");
+        Assert.NotEmpty(ReadAppSources());
+    }
 }

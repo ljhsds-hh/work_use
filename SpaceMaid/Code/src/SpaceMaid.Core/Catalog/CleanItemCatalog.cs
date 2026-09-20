@@ -265,9 +265,12 @@ public static class CleanItemCatalog
             "只在确认注册表里已经没有任何卸载项指向该目录时才列出（判定不确定的一律不列出），所以清单通常很短。查找范围只有 ProgramData、本地 AppData、漫游 AppData 三处，不会进入 Program Files；里面可能还留着旧软件的配置，保留期内可以从隔离区还原。",
             new[]
             {
-                TargetRule.Contents(@"%ProgramData%"),
-                TargetRule.Contents(@"%LOCALAPPDATA%"),
-                TargetRule.Contents(@"%APPDATA%")
+                // 枚举这三个根下**第一层子目录**里的文件（ContentsUnder + 保持非递归）：
+                // 卸载残留的判定单位是"目录"，所以候选必须来自子目录；直接在根下的散文件不属于残留目录。
+                // 只枚举一层 + 由 OrphanDirectorySelector 再做注册表/时效判定，两级收窄保证不会误报。
+                TargetRule.ContentsUnder(@"%ProgramData%", @"*"),
+                TargetRule.ContentsUnder(@"%LOCALAPPDATA%", @"*"),
+                TargetRule.ContentsUnder(@"%APPDATA%", @"*")
             },
             actionNote: "只在确认注册表已无对应卸载项时才列出",
             restoreHint: "可从隔离区还原（保留期内）；还原后它仍是一个没人引用的残留目录"),

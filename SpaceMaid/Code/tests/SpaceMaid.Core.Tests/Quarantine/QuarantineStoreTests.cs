@@ -156,6 +156,34 @@ public class QuarantineStoreTests
     }
 
     [Fact]
+    public void Should_allocate_unique_batch_directory_for_same_millisecond()
+    {
+        using var root = new TempRoot();
+        var firstFile = root.WriteFile(@"source\a.tmp", "a");
+        var secondFile = root.WriteFile(@"source\b.tmp", "b");
+        var quarantine = root.Combine("quarantine");
+        Directory.CreateDirectory(quarantine);
+
+        // 时钟被固定 ⇒ 两次 StoreCore 生成的批次 Id 完全相同。
+        // 如果批次目录不追加后缀，后一批的 map.json 会覆盖前一批，账目与文件永久对不上（会导致丢文件的高危路径）。
+        var store = CreateStore(new WindowsFileSystem(), new MappedVolumeProbe());
+
+        var first = store.StoreCore(quarantine, 7, new[] { Planned(firstFile, 1) }, null, CancellationToken.None);
+        var second = store.StoreCore(quarantine, 7, new[] { Planned(secondFile, 1) }, null, CancellationToken.None);
+
+        Assert.NotEqual(first.BatchId, second.BatchId);
+        Assert.NotEqual(first.BatchDirectory, second.BatchDirectory);
+
+        var maps = store.ReadAllMaps(quarantine);
+        Assert.Equal(2, maps.Count);
+        Assert.All(maps, pair => Assert.Single(pair.Map.Entries));
+
+        var info = store.Inspect(quarantine);
+        Assert.Equal(2, info.Batches.Count);
+        Assert.Equal(2, info.TotalBytes);
+    }
+
+    [Fact]
     public void Should_report_quarantine_info_with_expiry()
     {
         using var root = new TempRoot();

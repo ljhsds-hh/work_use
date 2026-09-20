@@ -100,6 +100,35 @@ public class CatalogDepthTests
         Assert.EndsWith(@"Downloads\setup.exe", entry.Files[0].Path, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Orphan_item_should_enumerate_files_inside_first_level_subdirectories()
+    {
+        using var root = new TempRoot();
+        var deep = root.WriteFile(@"LocalAppData\旧软件残留\config.dat", "old");
+        var loose = root.WriteFile(@"LocalAppData\loose.dat", "loose");
+        var old = DateTime.UtcNow.AddDays(-400);
+        File.SetLastWriteTimeUtc(deep, old);
+        File.SetLastWriteTimeUtc(loose, old);
+
+        var environment = new CatalogProbe(root.Path);
+        var item = CleanItemCatalog.ById("l3.orphan-app-dirs")!;
+        var engine = new ScanEngine(new WindowsFileSystem(), environment, new ScanFakeVolumeProbe(), new FakeClock(DateTimeOffset.Now));
+
+        var report = await engine.ScanAsync(new ScanRequest(new[] { item }, false), null, CancellationToken.None);
+        var files = report.Entries.Single().Files;
+
+        // 卸载残留的判定单位是目录：候选必须来自第一层子目录……
+        Assert.Contains(files, f => f.Path.EndsWith(@"旧软件残留\config.dat", StringComparison.OrdinalIgnoreCase));
+
+        // ……而直接躺在根下的散文件不属于"残留目录"（曾经这个条目因为只枚举直接子文件而永远产出 0 项）
+        Assert.DoesNotContain(files, f => f.Path.EndsWith(@"LocalAppData\loose.dat", StringComparison.OrdinalIgnoreCase));
+
+        // 两层深度也不进候选（只枚举一层，避免把用户深层数据卷进来）
+        var deeper = root.WriteFile(@"LocalAppData\旧软件残留\sub\deep.dat", "deep");
+        var second = await engine.ScanAsync(new ScanRequest(new[] { item }, false), null, CancellationToken.None);
+        Assert.DoesNotContain(second.Entries.Single().Files, f => f.Path == deeper);
+    }
+
     /// <summary>把条目里的环境变量都指到临时目录，用来在真实文件名结构上验证扫描行为。</summary>
     private sealed class CatalogProbe : IEnvironmentProbe
     {
