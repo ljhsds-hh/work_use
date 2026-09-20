@@ -82,7 +82,29 @@ if (-not (Test-Path $appDll)) {
     exit 2
 }
 
+# 先把上一次可能残留的实例清掉。
+# 为什么必须做：残留实例的窗口会一直留在用户桌面上（用户会以为"这程序一直在弹权限不足"），
+# 而且它会锁住 bin 下的 SpaceMaid.dll，让后续 dotnet build 报 MSB3027 "file is locked"。
+$stale = Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" | Where-Object { $_.CommandLine -like '*SpaceMaid.dll*' }
+foreach ($s in $stale) {
+    Write-Host ('[stale] 清掉上次残留的实例 pid=' + $s.ProcessId)
+    Stop-Process -Id $s.ProcessId -Force -ErrorAction SilentlyContinue
+}
+if ($stale) { Start-Sleep -Seconds 1 }
+
+# 无论后面哪一步失败，都要把本次启动的实例收掉：否则窗口留在桌面上、dll 被锁住
+$script:appProcess = $null
+trap {
+    if ($script:appProcess -and -not $script:appProcess.HasExited) {
+        $script:appProcess.Kill()
+        Write-Host '[cleanup] 异常退出，已结束应用进程'
+    }
+    Write-Host ('[error] ' + $_)
+    exit 2
+}
+
 $proc = Start-Process -FilePath 'dotnet' -ArgumentList @('SpaceMaid.dll') -WorkingDirectory $appDir -PassThru
+$script:appProcess = $proc
 $appPid = [uint32]$proc.Id
 Write-Host ('[start] pid=' + $appPid)
 

@@ -341,14 +341,19 @@ public class MainViewModelTests
         await host.ViewModel.InitializeAsync();
         await host.ViewModel.RescanAsync();
 
+        // 需求 3.6-2：未提权 → 阻止进入清理流程。提示走界面顶部的常驻红条，**不弹模态框**：
+        // 弹窗会把用户从正在做的事里拽出来，而且无人值守跑界面时必须有人点掉它才能继续
+        // （那正是"看起来一直在弹权限不足"的来源）。这里断言"挡住了" + "原因写清楚了" + "没有弹窗"。
         Assert.True(host.ViewModel.IsFlowBlocked);
         Assert.False(host.ViewModel.CanExecuteClean);
+        Assert.False(host.ViewModel.CanOneClickClean);
+        Assert.Empty(host.Dialogs.Warnings);
 
         await host.ViewModel.OneClickCleanAsync();
 
         Assert.Equal(0, host.Executor.CallCount);
         Assert.Contains("管理员", host.ViewModel.BlockReason);
-        Assert.Single(host.Dialogs.Warnings);
+        Assert.Contains("系统临时目录", host.ViewModel.BlockReason);   // 需求 3.6-4：说清为什么要管理员
     }
 
     // ── 需求 3.1-4：顶部磁盘总览的四个数字 ──

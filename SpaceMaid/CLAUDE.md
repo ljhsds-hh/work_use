@@ -167,7 +167,7 @@ Windows 桌面 C 盘（系统盘）空间清理工具（work_use 工具集之一
 ### 界面验证（本机看不了图，只能这样验）
 
 ```powershell
-# 启动应用（dotnet 宿主绕开 requireAdministrator 的 UAC）→ 点掉"权限不足"闸门 → 点「重新扫描」→
+# 启动应用（dotnet 宿主绕开 requireAdministrator 的 UAC；未提权只显示界面内红条，没有弹窗要点）→ 点「重新扫描」→
 # 逐页导出 UIA 树 + PrintWindow 像素统计 → 12 条断言 → 截图落 D:\logs\SpaceMaid\ui\
 powershell -NoProfile -ExecutionPolicy Bypass -File SpaceMaid\Code\scripts\probe-ui.ps1
 ```
@@ -253,17 +253,31 @@ dotnet test Code/tests/SpaceMaid.Core.Tests/SpaceMaid.Core.Tests.csproj
    现在两条都由 `StaticSafetyTests.Design_tokens_should_be_unique_and_referenced_keys_should_exist` 守着。
 7. **不要 `BasedOn` HandyControl 的按钮样式键**。HC 3.5.1 的键名不全可靠：`ButtonPrimary`/`ButtonDefault`/`ButtonDanger` 在，
    但 **`ButtonTransparent` 不存在**（`BasedOn` 它会让启动直接抛"找不到资源"）。按钮外观已改为本设计系统自带模板。
-8. **启动顺序：主窗必须先登记为 `Application.MainWindow`，再跑 `viewModel.Initialize()`**。
-   Initialize 里会弹"权限不足"对话框（需求 3.6-2），而 WPF 把**第一个显示出来的窗口**记为 `Application.MainWindow`；
-   配合 `ShutdownMode.OnMainWindowClose`，那个对话框一被点掉就把整个应用关掉——真机现象是
-   "未提权启动 → 点掉提示 → 程序直接消失"。`StaticSafetyTests.App_should_register_main_window_before_running_startup_checks` 守着这个顺序。
+8. **未提权的提示走界面内常驻红条，绝不弹模态框**（需求 3.6-2 要求「明确提示 + 阻止进入清理流程」，没要求弹窗）。
+   曾经弹过模态框，现在去掉了：① 顶部红条本来就在显示同一句话，弹窗是重复；② 模态框会把用户从正在做的事里拽出来；
+   ③ **无人值守/自动化跑界面时，弹窗必须有人点掉才能继续**——反复跑验证就会看见「程序一直在弹权限不足」，
+   这条被用户当面抱怨过。现在的做法是「说清楚 + 挡住」：红条给出原因（含需求 3.6-4 的「为什么需要管理员权限」），
+   清理按钮全部禁用（`CanExecuteClean` / `CanOneClickClean` 都为 false）。
+
+   **启动顺序仍然成立（改动前必读）**：主窗必须先登记为 `Application.MainWindow`，再跑 `viewModel.Initialize()`。
+   原因与"弹不弹窗"无关：WPF 把**第一个显示出来的窗口**记为 `Application.MainWindow`，而本应用是
+   `ShutdownMode.OnMainWindowClose`——启动自检期间只要有任何别的窗口先显示（哪怕将来又把弹窗加回来），
+   它就会顶掉主窗身份，用户一关那个窗口整个应用就跟着退出。真机现象是"未提权启动 → 关掉提示 → 程序直接消失"。
+   `StaticSafetyTests.App_should_register_main_window_before_running_startup_checks` 守着这个顺序。
 9. **对话框的 Owner 必须是"已显示"的窗口**，否则 WPF 抛"无法将 Owner 属性设置为之前未显示的 Window"。
    `DialogService.HostWindow()` 用 `IsLoaded` 判断，拿不到就退回无 Owner 的模态框。
 10. **事件订阅容易漏**。`RequestOpenSettings` 曾经**没人订阅**：ViewModel 侧事件、命令、导航分支都齐了，
     结果「设置」按钮点下去毫无反应，设置面板整块进不去，而界面上看不出任何异常。
     `StaticSafetyTests.App_should_wire_settings_request_from_viewmodel` 守着 `+=` / `-=` 成对存在。
-11. **界面相关的坑只有把界面真跑起来点一遍才会暴露**（启动失败、按钮没反应、颜色没上）。
-    改完界面**必须**跑 `probe-ui.ps1`，它会先把"权限不足"闸门点掉再验证真实主窗。
+11. **界面验证脚本必须「跑完兜底收进程」**，否则残留实例会留在用户桌面上、还会锁住 bin 下的 dll 让构建失败。
+    真实事故：一个子代理在后台反复启动应用做实验（甚至用 `SetCursorPos` + `mouse_event` 模拟真鼠标点击），
+    留下 `dotnet SpaceMaid.dll` 进程与窗口停在用户桌面上；用户看到的就是「这程序一直在重启、一直弹权限不足」。
+    现在 `probe-ui.ps1` 两头都做了：**开跑先清上一次的残留实例**、**用 `trap` 保证任何异常路径都收掉本次实例**。
+    两条教训：① 界面实验不要放手让子代理自由跑（它不会替你收尾）；② 按命令行匹配杀进程时必须排除自己
+    （`-ne $PID` 与父进程），否则会把自己的 runner 杀掉，表现为命令返回 `4294967295` 且输出被截断。
+
+    另外一条（原本第 11 条的要点）：**界面相关的坑只有把界面真跑起来点一遍才会暴露**（启动失败、按钮没反应、颜色没上）。
+    改完界面**必须**跑 `probe-ui.ps1`；脚本开跑先清残留实例、跑完（含异常路径）一定收进程，绝不在你桌面上留窗口。
 
 ## 构建与发布
 

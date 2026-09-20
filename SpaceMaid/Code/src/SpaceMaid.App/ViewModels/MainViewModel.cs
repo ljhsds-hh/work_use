@@ -628,8 +628,17 @@ public sealed class MainViewModel : ViewModelBase
         {
             IsFlowBlocked = true;
             OnPropertyChanged(nameof(CanOneClickClean));
-            BlockReason = "当前进程不具备管理员权限，已阻止进入清理流程。请通过 SpaceMaid.exe 启动（清单已固定要求管理员权限）。";
-            _dialogs.Warn(BlockReason, "权限不足");
+
+            // 需求 3.6-2「给出明确提示并阻止进入清理流程」+ 3.6-4「说明为什么需要管理员权限」。
+            //
+            // 这里**不再弹模态对话框**（曾经弹过）。理由：
+            // ① 界面顶部本来就有一条常驻的红色提示条显示这句话，弹窗纯属重复；
+            // ② 模态框会把用户从正在做的事里拽出来，而且它会抢 Application.MainWindow 的身份（见 App.xaml.cs 的顺序注释）；
+            // ③ 无人值守/自动化跑界面时，弹窗必须有人点掉才能继续——这正是"看起来一直在弹权限不足"的来源。
+            // 现在的做法是「说清楚 + 挡住」：顶部红条给出原因，清理按钮全部禁用（CanExecuteClean / CanOneClickClean 均为 false）。
+            BlockReason = "当前进程不具备管理员权限，已阻止进入清理流程。"
+                          + "本工具需要管理员权限，因为要清理系统临时目录、系统更新缓存与内核转储这些系统位置。"
+                          + "请通过 SpaceMaid.exe 启动（程序清单已固定要求管理员权限，会由系统弹一次 UAC）。";
         }
 
         var preparation = _bridge.Prepare();
