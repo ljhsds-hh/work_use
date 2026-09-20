@@ -201,7 +201,7 @@ Invoke-Expression (Get-Content -Raw -Encoding UTF8 'Code\scripts\gen-icon.ps1')
 dotnet publish Code/src/SpaceMaid.App -c Release
 ```
 
-发布产物：`Code/src/SpaceMaid.App/bin/Release/net8.0-windows/win-x64/publish/SpaceMaid.exe`，实测 **67,217,692 字节（64.1 MB）**，且 **publish 目录下只有这一个文件**。
+发布产物：`Code/src/SpaceMaid.App/bin/Release/net8.0-windows/win-x64/publish/SpaceMaid.exe`，实测 **64.1 MB（67,219,170 字节，HEAD `9e4aa87`）**，且 **publish 目录下只有这一个文件**。
 
 "publish 目录只剩一个 exe" 是靠 `Code/Directory.Build.props` 守住的：它只对 Release 设置 `DebugType=none` / `DebugSymbols=false`。原因是 `SpaceMaid.Core.pdb` 会跟着被拷进 publish 目录，让"一个 exe 免安装"这句话在目录列表里当场破功。放在解决方案级的 `Directory.Build.props` 而不是各 `csproj` 里，是为了以后新增工程时不会漏掉；**Debug 配置必须保留 pdb**，否则出问题没有行号可查。
 
@@ -274,10 +274,10 @@ SpaceMaid/
 | 界面 `SpaceMaid.App` | 已完成：三段式主窗 + 设置窗，`ViewModels/`、`Views/`、`Themes/DesignTokens.xaml` 全部就位 | `Code/scripts/smoke-ui.ps1` 实测 PASS |
 | 只读 CLI | **已接进 `SpaceMaid.exe`**：`App.xaml.cs` 解析命令行，`CliOptions.IsCommandLineInvocation` 为真时走 CLI 分支且**绝不回退到 GUI** | `dotnet SpaceMaid.dll --help` 退出码 0；`--clean` 退出码 2 并提示"本工具不提供命令行清理能力" |
 | 应用图标 | 已就位：`Code/scripts/gen-icon.ps1` 程序化生成 9 种尺寸的 `Assets/app.ico`（381,038 字节，已逐像素验证） | 与 `SpaceMaid.App.csproj` 的 `<ApplicationIcon>` 一致 |
-| 发布管道 | 已就位：`Code/Directory.Build.props` 仅对 Release 去掉调试符号 | `dotnet publish -c Release` 后 publish 目录只有 1 个文件 `SpaceMaid.exe`（67,217,692 字节） |
+| 发布管道 | 已就位：`Code/Directory.Build.props` 仅对 Release 去掉调试符号 | `dotnet publish -c Release` 后 publish 目录只有 1 个文件 `SpaceMaid.exe`（实测 64.1 MB，publish 目录下只有这一个文件） |
 | 界面冒烟 | 已就位：`Code/scripts/smoke-ui.ps1`（用 dotnet 宿主加载，绕开 `requireAdministrator` 的 apphost，避免无人值守时卡在 UAC） | 实测 PASS：3 秒内匹配到标题"权限不足"，退出码 0，无进程残留 |
 
-界面层的界面核验已经跑通，但**仍需人工过一遍端到端点击流程**；内核侧唯一待办是 `Code/tests/SpaceMaid.Core.Tests/Execution/DismComponentCleanupTests.cs`（实施计划点名的用例，目前 DISM 参数不含重置基线这条由 `HibernateGateTests` 的同名断言 + `Architecture/StaticSafetyTests.cs` 的源码级断言覆盖）。
+**内核侧没有遗留待办**（实施计划点名的 `DismComponentCleanupTests.Should_not_use_reset_base` 其实早就存在：类定义在 `Code/tests/SpaceMaid.Core.Tests/Execution/HibernateGateTests.cs` 内，用例 `Should_use_fixed_official_command_only` 断言下发的 DISM 命令等于常量且不含重置基线开关；与计划的唯一差异是文件名）。**界面侧仍需人工过一遍端到端点击流程**——这需要管理员权限，自动化跑不了：`smoke-ui.ps1` 只能证明"能起来 + 提权闸门有效"，证明不了你亲手点一遍的观感与流程。
 
 > **仍未在真机执行过真实清理。** 按需求 3.9，工具只出清单，用户审阅后自己执行，工具再复核；到目前为止所有实测都停在 dry-run 与复核这一侧，"清理成功"没有任何实机证据。
 
