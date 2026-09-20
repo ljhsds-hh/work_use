@@ -35,7 +35,7 @@ public enum CleanActionKind
     /// <summary>powercfg /h off：关闭休眠并释放 hiberfil.sys（需授权闸门，需求 3.8）。</summary>
     HibernateOff,
 
-    /// <summary>DISM 官方组件清理（禁止 /ResetBase）。</summary>
+    /// <summary>DISM 官方组件清理（只走 StartComponentCleanup，禁止重置基线开关）。</summary>
     DismComponentCleanup,
 
     /// <summary>只展示不执行（如 pagefile.sys）。</summary>
