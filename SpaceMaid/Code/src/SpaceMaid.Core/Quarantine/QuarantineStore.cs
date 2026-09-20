@@ -1,6 +1,7 @@
 using SpaceMaid.Core.Abstractions;
 using SpaceMaid.Core.Logging;
 using SpaceMaid.Core.Models;
+using SpaceMaid.Core.Safety;
 
 namespace SpaceMaid.Core.Quarantine;
 
@@ -62,8 +63,7 @@ public sealed class QuarantineStore
         CancellationToken cancellationToken)
     {
         var createdAt = _clock.Now;
-        var batchId = CreateBatchId(createdAt);
-        var batchDirectory = GetBatchDirectory(quarantineRoot, batchId);
+        var (batchId, batchDirectory) = AllocateBatch(quarantineRoot, createdAt);
         var payloadDirectory = Path.Combine(batchDirectory, PayloadFolder);
 
         var sourceVolume = files.Count > 0 ? _volumes.GetVolumeOf(files[0].OriginalPath) : string.Empty;
@@ -299,6 +299,46 @@ public sealed class QuarantineStore
     internal bool DeleteQuarantinedFile(string payloadPath, out string error) =>
         _fileSystem.TryDeleteFile(payloadPath, out error);
 
+    /// <summary>
+    /// 删除一个批次目录（释放/清空时使用）。**唯一允许调用目录删除的位置**（不变量 I-1）。
+    /// 带两重护栏：批次目录必须位于给定隔离区根之下，且根目录自身绝不允许被删除。
+    /// </summary>
+    internal bool RemoveBatchDirectory(string quarantineRoot, string batchDirectory, out string error)
+    {
+        error = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(quarantineRoot) || string.IsNullOrWhiteSpace(batchDirectory))
+        {
+            error = "隔离区根或批次目录为空";
+            return false;
+        }
+
+        var root = Path.GetFullPath(quarantineRoot);
+        var target = Path.GetFullPath(batchDirectory);
+
+        if (!PathNormalizer.IsUnder(target, root))
+        {
+            error = $"拒绝删除隔离区之外的目录：{target}";
+            _log.Error(error);
+            return false;
+        }
+
+        try
+        {
+            if (Directory.Exists(target))
+            {
+                Directory.Delete(target, recursive: true);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = $"删除批次目录失败：{ex.Message}";
+            return false;
+        }
+    }
+
     private (bool Ok, string Reason) MoveFile(string source, string destination, bool sameVolume)
     {
         if (!_fileSystem.FileExists(source))
@@ -340,6 +380,27 @@ public sealed class QuarantineStore
         }
 
         return (true, string.Empty);
+    }
+
+    /// <summary>
+    /// 分配一个**唯一**的批次目录。
+    /// 为什么需要去重：批次 Id 精确到毫秒，同一毫秒内连续清理两次（或时钟被回拨）会撞名，
+    /// 后一批的账本会覆盖前一批，直接导致文件丢失——必须在这里挡住。
+    /// </summary>
+    private (string BatchId, string BatchDirectory) AllocateBatch(string quarantineRoot, DateTimeOffset createdAt)
+    {
+        var baseId = CreateBatchId(createdAt);
+        var batchId = baseId;
+        var directory = GetBatchDirectory(quarantineRoot, batchId);
+        var suffix = 1;
+
+        while (_fileSystem.DirectoryExists(directory))
+        {
+            batchId = $"{baseId}-{suffix++}";
+            directory = GetBatchDirectory(quarantineRoot, batchId);
+        }
+
+        return (batchId, directory);
     }
 
     private IEnumerable<string> EnumerateBatchDirectories(string quarantineRoot)

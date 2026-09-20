@@ -107,6 +107,13 @@ public sealed record StoreResult(bool Ok, string? Reason, long MovedBytes)
 /// <summary>还原选项。覆盖默认关闭（需求 3.4-6：不静默覆盖）。</summary>
 public sealed record RestoreOptions(bool Overwrite = false);
 
+/// <summary>释放（到期自动释放 / 立即清空隔离区）的结果。</summary>
+public sealed record ReleaseResult(
+    int ReleasedBatches,
+    int ReleasedFiles,
+    long ReleasedBytes,
+    IReadOnlyList<string> Notes);
+
 public sealed record RestoreConflict(string OriginalPath, string Reason);
 
 public sealed record RestoreFailure(string OriginalPath, string Reason);
