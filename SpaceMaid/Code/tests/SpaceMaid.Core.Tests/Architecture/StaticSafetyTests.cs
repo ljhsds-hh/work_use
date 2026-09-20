@@ -226,6 +226,83 @@ public class StaticSafetyTests
     }
 
     [Fact]
+    public void App_should_not_own_a_command_runner()
+    {
+        // 界面**必然**会在文案里提到 powercfg（需求 3.8 就要求把"将关闭休眠、可逆"讲清楚），
+        // 所以这里不能查命令名字，而要查"界面有没有自己执行命令的能力"：
+        // 只要界面拿不到 ICommandRunner / ProcessCommandRunner，它就无从绕过内核的专项动作去跑命令。
+        foreach (var (file, text) in ReadAppSources())
+        {
+            Assert.DoesNotContain("ProcessCommandRunner", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("ICommandRunner", text, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// 覆盖式移动/复制（<c>overwrite: true</c>）事实上有"删除原内容"的效果，因此也要进白名单审计。
+    /// 三个合法位置：文件系统实现（原子替换）、隔离区账本写盘、设置写盘——都只覆盖自己刚写的临时文件。
+    /// </summary>
+    [Fact]
+    public void Overwriting_moves_and_copies_should_only_appear_in_allowlisted_files()
+    {
+        var allowlist = new[]
+        {
+            @"Platform\WindowsFileSystem.cs",
+            @"Quarantine\QuarantineMapStore.cs",
+            @"Settings\SettingsStore.cs"
+        };
+
+        var offenders = new List<string>();
+
+        foreach (var (file, text) in ReadCoreSources())
+        {
+            if (allowlist.Contains(file, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (text.Contains("overwrite: true", StringComparison.Ordinal))
+            {
+                offenders.Add(file);
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "以下文件出现了覆盖式移动/复制，但不在白名单内：" + string.Join("；", offenders));
+    }
+
+    /// <summary>
+    /// 结构化检查（比查字符串更难绕过）：内核**公开方法**的命名里不允许出现
+    /// Force / Skip / Bypass / Ignore 这类暗示"可以绕过"的词。
+    /// 改个名字就能骗过文本检索，但骗不过反射。
+    /// </summary>
+    [Fact]
+    public void Public_api_should_not_smell_like_a_bypass()
+    {
+        var suspicious = new[] { "force", "bypass", "ignore", "override" };
+        var offenders = new List<string>();
+
+        var coreAssembly = typeof(SpaceMaid.Core.Marker).Assembly;
+        foreach (var type in coreAssembly.GetExportedTypes())
+        {
+            foreach (var method in type.GetMethods(System.Reflection.BindingFlags.Public
+                                                     | System.Reflection.BindingFlags.Instance
+                                                     | System.Reflection.BindingFlags.Static
+                                                     | System.Reflection.BindingFlags.DeclaredOnly))
+            {
+                var name = method.Name.ToLowerInvariant();
+                if (suspicious.Any(token => name.Contains(token, StringComparison.Ordinal)))
+                {
+                    offenders.Add($"{type.Name}.{method.Name}");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "内核公开方法名里出现了可疑词（疑似绕过开关）：" + string.Join("；", offenders));
+    }
+
+    [Fact]
     public void App_source_root_should_be_discovered()
     {
         Assert.True(Directory.Exists(AppSourceRoot), $"找不到界面源码目录：{AppSourceRoot}");

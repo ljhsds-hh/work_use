@@ -21,6 +21,7 @@
 
     <Window.Resources>
         <helpers:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+        <helpers:BoolToVisibilityConverter x:Key="InverseBoolToVisibility" Invert="True" />
         <helpers:TextToVisibilityConverter x:Key="TextToVisibility" />
     </Window.Resources>
 
@@ -70,6 +71,35 @@
                     <TextBlock Margin="0,8,0,0" Style="{StaticResource SmTextDanger}"
                                Text="当前位置不可用，保存已被拒绝。请换一个本地固定磁盘上的普通文件夹。"
                                Visibility="{Binding IsRejected, Converter={StaticResource BoolToVisibility}}" />
+
+                    <TextBlock Margin="0,16,0,0" Style="{StaticResource SmTextSection}" Text="隔离区里的批次（保留期内可一键还原）" />
+                    <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
+                               Text="还原会把该批次的文件搬回原来的位置；原位置已有同名文件的会被跳过，不会被覆盖。" />
+
+                    <!-- 逐批次还原（需求 2.1 / 3.4-6）：HC 3.5.1 没有 ItemsControl 皮肤，用 WPF 原生 ItemsControl + HC 令牌样式 -->
+                    <ItemsControl Name="QuarantineBatchList" Margin="0,8,0,0" ItemsSource="{Binding QuarantineBatches, Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,4,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Style="{StaticResource SmTextBody}" Text="{Binding SummaryText, Mode=OneWay}" />
+                                        <TextBlock Style="{StaticResource SmTextDanger}" Text="{Binding ExpiredText, Mode=OneWay}"
+                                                   Visibility="{Binding IsExpired, Converter={StaticResource BoolToVisibility}}" />
+                                        <TextBlock Style="{StaticResource SmTextCaption}" Text="{Binding StatusText, Mode=OneWay}" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center"
+                                            Content="还原此批次…" Command="{Binding RestoreCommand}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Margin="0,8,0,0" Style="{StaticResource SmTextCaption}"
+                               Text="当前隔离区里没有批次。" Visibility="{Binding HasQuarantineBatches, Converter={StaticResource InverseBoolToVisibility}}" />
 
                     <TextBlock Margin="0,16,0,0" Style="{StaticResource SmTextCaption}"
                                Text="隔离区当前占用（下次启动会惰性释放到期批次）" />

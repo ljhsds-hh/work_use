@@ -39,6 +39,12 @@ public interface ICoreBridge
     /// <summary>隔离区现状（条数 / 体积 / 到期批次数）。</summary>
     QuarantineInfo InspectQuarantine();
 
+    /// <summary>
+    /// 还原一个隔离批次（需求 2.1 / 3.4-6 的"一键还原"）。
+    /// 原位置已有同名文件时记为冲突且**不覆盖**；调用方负责先做二次确认。
+    /// </summary>
+    RestoreResult RestoreBatch(string batchId);
+
     /// <summary>立即清空隔离区（调用方必须先完成二次确认）。</summary>
     ReleaseResult ClearQuarantine();
 
@@ -178,6 +184,11 @@ public sealed class CoreServicesBridge(CoreServices services) : ICoreBridge
         ManifestWriter.BuildIndex(plan, directory);
 
     public ManifestRowIndex ReadManifest(string directory) => ManifestReader.Read(directory);
+
+    // 还原走内核 QuarantineService.Restore：冲突不覆盖、目标路径过禁止清单校验都在内核里完成，
+    // 界面只负责"问一句、转一道、把结果念给用户听"。
+    public RestoreResult RestoreBatch(string batchId) =>
+        _services.Quarantine.Restore(_services.QuarantineRoot, batchId);
 
     public ReviewReport Review(ManifestRowIndex index, long releasedBytes, bool sameVolume) =>
         _services.Reviewer.Review(index, _services.Quarantine.ReadMaps(_services.QuarantineRoot), index.Directory, releasedBytes, sameVolume);

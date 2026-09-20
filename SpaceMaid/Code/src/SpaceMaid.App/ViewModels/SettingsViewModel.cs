@@ -51,8 +51,72 @@ public sealed class SettingsViewModel : ViewModelBase
         ClearQuarantineCommand = new RelayCommand(() => ClearQuarantineNow());
         OpenReportDirectoryCommand = new RelayCommand(OpenReportDirectory);
         OpenLogDirectoryCommand = new RelayCommand(OpenLogDirectory);
+        RefreshQuarantineCommand = new RelayCommand(RefreshQuarantineBatches);
 
         Validate();
+        RefreshQuarantineBatches();
+    }
+
+    /// <summary>
+    /// 隔离区里的批次列表（需求 2.1 / 3.4-6：保留期内可一键还原）。
+    /// 还原是逐批次的动作，所以每一行都要能看清"批次号 / 文件数 / 体积 / 到期时间"。
+    /// </summary>
+    public System.Collections.ObjectModel.ObservableCollection<QuarantineBatchViewModel> QuarantineBatches { get; } = new();
+
+    public System.Windows.Input.ICommand RefreshQuarantineCommand { get; }
+
+    /// <summary>重新读取隔离区批次（还原、清空、保存设置后都要刷新）。</summary>
+    public void RefreshQuarantineBatches()
+    {
+        QuarantineBatches.Clear();
+
+        foreach (var batch in _bridge.InspectQuarantine().Batches)
+        {
+            QuarantineBatches.Add(new QuarantineBatchViewModel(batch, _bridge.RestoreBatch, _ => RefreshQuarantineBatches()));
+        }
+
+        OnPropertyChanged(nameof(QuarantineUsageText));
+        OnPropertyChanged(nameof(HasQuarantineBatches));
+    }
+
+    public bool HasQuarantineBatches => QuarantineBatches.Count > 0;
+
+    /// <summary>
+    /// 一键还原某一批次（需求 2.1 / 3.4-6）：必须先二次确认；用户取消则**不调用任何还原动作**。
+    /// 冲突（原位置已有同名文件）与失败都会如实回报，绝不覆盖用户现有文件。
+    /// </summary>
+    public RestoreResult? RestoreBatchNow(string batchId)
+    {
+        var batch = QuarantineBatches.FirstOrDefault(b => b.BatchId == batchId);
+        if (batch is null)
+        {
+            _notifications.Notify("没有找到这个隔离批次，可能已经被释放。");
+            RefreshQuarantineBatches();
+            return null;
+        }
+
+        var message =
+            $"将把这个批次里的 {batch.Batch.EntryCount} 个文件（{Core.Reporting.VolumeTextFormatter.FormatBytes(batch.Batch.TotalBytes)}）"
+            + "搬回它们**原来的位置**。" + Environment.NewLine + Environment.NewLine
+            + "如果原位置已经有同名文件，那个文件会被**跳过、不会被覆盖**。" + Environment.NewLine
+            + (batch.IsExpired ? "注意：该批次保留期已过，随时可能被自动释放。" + Environment.NewLine + Environment.NewLine : string.Empty)
+            + "确定要还原吗？";
+
+        if (!_dialogs.Confirm(message, "还原隔离批次"))
+        {
+            _notifications.Notify("已取消，隔离区未做任何改动。");
+            return null;
+        }
+
+        var result = _bridge.RestoreBatch(batchId);
+
+        var summary = $"已还原 {result.RestoredCount} 个文件（{Core.Reporting.VolumeTextFormatter.FormatBytes(result.RestoredBytes)}）"
+                      + (result.Conflicts.Count > 0 ? $"；{result.Conflicts.Count} 个因原位置已有同名文件被跳过" : string.Empty)
+                      + (result.Failures.Count > 0 ? $"；{result.Failures.Count} 个失败（{result.Failures[0].Reason}）" : string.Empty);
+
+        _notifications.Notify(summary);
+        RefreshQuarantineBatches();
+        return result;
     }
 
     public System.Windows.Input.ICommand PickQuarantineFolderCommand { get; }
@@ -236,6 +300,9 @@ public sealed class SettingsViewModel : ViewModelBase
         SaveStatusMessage = "设置已保存。隔离区位置的变更会在下一次清理时生效。";
         OnPropertyChanged(nameof(SaveStatusMessage));
         _notifications.Notify(SaveStatusMessage);
+
+        // 隔离区位置变了，批次列表与占用都要重新读（否则用户会看到上一处目录的旧数据）
+        RefreshQuarantineBatches();
         return true;
     }
 
@@ -267,7 +334,7 @@ public sealed class SettingsViewModel : ViewModelBase
         var result = _bridge.ClearQuarantine();
         _notifications.Notify(
             $"隔离区已清空：{result.ReleasedBatches} 个批次、{Core.Reporting.VolumeTextFormatter.FormatBytes(result.ReleasedBytes)}。");
-        OnPropertyChanged(nameof(QuarantineUsageText));
+        RefreshQuarantineBatches();
         return result;
     }
 

@@ -27,6 +27,17 @@ public sealed class ScanEngine : IScanEngine
     private readonly IRecycleBinScanner? _recycleBin;
     private readonly ILogSink _log;
     private readonly IReadOnlyList<IItemCandidateSelector> _selectors;
+    private readonly int _maxFilesPerItem;
+
+    /// <summary>
+    /// 单项候选枚举上限。畸形目录树（几十万小文件、指向上层的 junction 环）不能让整次扫描变成"假死"；
+    /// 达到上限就带上"结果可能不完整"的说明继续（对抗式评审 F-12）。
+    /// </summary>
+    public const int MaxFilesPerItem = 200_000;
+
+    /// <summary>触发枚举上限时给用户看的说明。</summary>
+    private static readonly string TruncationNote =
+        $"该目录下文件数超过 {MaxFilesPerItem} 个枚举上限，本次结果可能不完整（建议先在文件管理器里看看这个目录的规模）";
 
     /// <param name="selectors">
     /// 各清理项的"候选收窄器"（可选）。**它们只能把候选集收窄，不能扩大**——
@@ -41,7 +52,8 @@ public sealed class ScanEngine : IScanEngine
         IVolumeCapacityProbe? capacity = null,
         IRecycleBinScanner? recycleBin = null,
         ILogSink? log = null,
-        IEnumerable<IItemCandidateSelector>? selectors = null)
+        IEnumerable<IItemCandidateSelector>? selectors = null,
+        int maxFilesPerItem = MaxFilesPerItem)
     {
         _fileSystem = fileSystem;
         _environment = environment;
@@ -51,6 +63,7 @@ public sealed class ScanEngine : IScanEngine
         _recycleBin = recycleBin;
         _log = log ?? SilentLogSink.Instance;
         _selectors = selectors?.Where(selector => selector is not null).ToList() ?? new List<IItemCandidateSelector>();
+        _maxFilesPerItem = maxFilesPerItem > 0 ? maxFilesPerItem : MaxFilesPerItem;
     }
 
     /// <summary>
@@ -84,13 +97,20 @@ public sealed class ScanEngine : IScanEngine
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var (candidates, unavailableReason) = CollectCandidates(item, request.IncludeRecycleBin, cancellationToken);
+            var (candidates, unavailableReason, truncated) = CollectCandidates(item, request.IncludeRecycleBin, cancellationToken);
             var narrowed = ApplySelectors(item, candidates, cancellationToken);
             var outcome = ScanningRules.Apply(item, narrowed, now, GetTargetCreationTime(item));
 
             var totalBytes = outcome.Files.Sum(f => f.Size);
             processedBytes += totalBytes;
             processedFiles += outcome.Files.Count;
+
+            // 说明文字优先级：不可用原因 > 规则提示 > 枚举上限提示
+            var note = unavailableReason ?? outcome.Note;
+            if (truncated)
+            {
+                note = string.IsNullOrWhiteSpace(note) ? TruncationNote : $"{note}；{TruncationNote}";
+            }
 
             var available = unavailableReason is null;
             entries.Add(new ScanEntry(
@@ -100,7 +120,7 @@ public sealed class ScanEngine : IScanEngine
                 outcome.SkippedCount,
                 outcome.Files,
                 available,
-                unavailableReason ?? outcome.Note)
+                note)
             {
                 // 明确保留不处理的那一份（例如最近一次蓝屏转储）：必须一路传到清单，用户才看得到"保留：xxx"
                 Kept = outcome.Kept
@@ -126,7 +146,7 @@ public sealed class ScanEngine : IScanEngine
     /// <summary>
     /// 按目标规则收集候选文件。返回 (候选, 不可用原因)；不可用原因为 null 表示条目可用。
     /// </summary>
-    private (List<ScanFile> Candidates, string? UnavailableReason) CollectCandidates(
+    private (List<ScanFile> Candidates, string? UnavailableReason, bool Truncated) CollectCandidates(
         CleanItemDefinition item,
         bool includeRecycleBin,
         CancellationToken cancellationToken)
@@ -134,6 +154,7 @@ public sealed class ScanEngine : IScanEngine
         var candidates = new List<ScanFile>();
         var missing = new List<string>();
         var counter = 0;
+        var truncated = false;
 
         foreach (var rule in item.Targets)
         {
@@ -146,7 +167,7 @@ public sealed class ScanEngine : IScanEngine
 
                 if (_recycleBin is null)
                 {
-                    return (candidates, "回收站扫描器未启用");
+                    return (candidates, "回收站扫描器未启用", false);
                 }
 
                 candidates.AddRange(_recycleBin.Scan(includeOtherDrives: includeRecycleBin));
@@ -197,6 +218,14 @@ public sealed class ScanEngine : IScanEngine
                                 cancellationToken.ThrowIfCancellationRequested();
                             }
 
+                            if (candidates.Count >= _maxFilesPerItem)
+                            {
+                                // 枚举上限：畸形目录树（几十万文件、junction 环）不能让整次扫描变成"假死"。
+                                // 已收集的部分照常处理，并在条目上如实标注"可能不完整"（对抗式评审 F-12）。
+                                truncated = true;
+                                return (candidates, null, truncated);
+                            }
+
                             candidates.Add(ToScanFile(file, item, _fileSystem.GetLastWriteTime(file), _fileSystem.GetFileSize(file)));
                         }
                     }
@@ -211,10 +240,10 @@ public sealed class ScanEngine : IScanEngine
 
         if (candidates.Count == 0 && missing.Count > 0)
         {
-            return (candidates, $"目标路径不存在或不可用：{string.Join("；", missing.Take(3))}");
+            return (candidates, $"目标路径不存在或不可用：{string.Join("；", missing.Take(3))}", false);
         }
 
-        return (candidates, null);
+        return (candidates, null, truncated);
     }
 
     /// <summary>

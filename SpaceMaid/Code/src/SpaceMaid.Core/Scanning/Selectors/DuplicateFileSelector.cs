@@ -24,6 +24,13 @@ public sealed class DuplicateFileSelector : IItemCandidateSelector
     /// <summary>对应的清理项 Id（与 CleanItemCatalog 一致，一经发布不得改名）。</summary>
     public const string ItemId = "l3.duplicate-files";
 
+    /// <summary>
+    /// 参与重复判定的体积上限（512 MB）。超过它的文件直接排除：
+    /// 对几个 GB 的镜像/虚拟磁盘做全量哈希会让扫描长时间无响应，而那种"重复"通常是你自己的数据，
+    /// 交给下面的"大文件"条目按体积展示更合适（对抗式评审 F-12：扫描必须有界限）。
+    /// </summary>
+    public const long MaxFileSizeBytes = 512L * 1024 * 1024;
+
     /// <inheritdoc />
     public bool CanHandle(string itemId) => string.Equals(itemId, ItemId, StringComparison.Ordinal);
 
@@ -39,9 +46,10 @@ public sealed class DuplicateFileSelector : IItemCandidateSelector
 
         var result = new List<ScanFile>();
         var failedHashes = 0;
+        var tooLarge = 0;
 
-        // ① 先按体积分组（0 字节文件与独苗组直接跳过）
-        foreach (var sizeGroup in candidates.Where(file => file.Size > 0).GroupBy(file => file.Size))
+        // ① 先按体积分组（0 字节文件、独苗组与超大文件直接跳过）
+        foreach (var sizeGroup in candidates.Where(file => file.Size > 0 && file.Size <= MaxFileSizeBytes).GroupBy(file => file.Size))
         {
             var sameSize = sizeGroup.ToList();
             if (sameSize.Count < 2)
@@ -84,10 +92,13 @@ public sealed class DuplicateFileSelector : IItemCandidateSelector
             .ThenBy(file => file.Path, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        tooLarge = candidates.Count(file => file.Size > MaxFileSizeBytes);
+
         if (candidates.Count != output.Count)
         {
             log?.Info($"重复文件候选收窄：{candidates.Count} 个候选 → {output.Count} 个" +
-                      $"（只列出每组重复里除保留份之外的其余文件；{failedHashes} 个文件因读不到内容被跳过）");
+                      $"（只列出每组重复里除保留份之外的其余文件；{failedHashes} 个文件因读不到内容被跳过；" +
+                      $"{tooLarge} 个文件超过 {MaxFileSizeBytes / 1024 / 1024} MB 未参与判定）");
         }
 
         return output;
