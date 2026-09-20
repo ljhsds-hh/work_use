@@ -19,6 +19,12 @@ public sealed record ScanEntry(
     bool Available,
     string? UnavailableReason)
 {
+    /// <summary>
+    /// 明确保留、不处理的那一份（例如最近一次蓝屏转储）。
+    /// 必须一路传到清单，用户才能在清单/界面里看到"保留：&lt;路径&gt;"——否则"保留最近一次"只是内部行为，用户无从确认。
+    /// </summary>
+    public IReadOnlyList<ScanFile> Kept { get; init; } = Array.Empty<ScanFile>();
+
     public bool HasContent => FileCount > 0;
 }
 

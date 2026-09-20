@@ -2,6 +2,7 @@ using System.Reflection;
 using SpaceMaid.App.Services;
 using SpaceMaid.App.Tests.Fakes;
 using SpaceMaid.App.ViewModels;
+using System.IO;
 using SpaceMaid.Core.Models;
 using SpaceMaid.Core.Quarantine;
 
@@ -246,8 +247,10 @@ public class MainViewModelTests
         Assert.All(host.Executor.LastPlan!.Checked, item => Assert.Equal(CleanCategory.L1OneClick, item.Category));
     }
 
+    // ── 需求 3.9-4：复核必须与"本次真正执行的集合"严格对应（对抗式评审 F-4） ──
+
     [Fact]
-    public async Task Execute_without_export_must_not_produce_review_report()
+    public async Task Execute_should_write_manifest_of_the_executed_set_and_review_it()
     {
         var host = new MainViewModelTestHost();
         await host.ViewModel.InitializeAsync();
@@ -256,8 +259,42 @@ public class MainViewModelTests
         await host.ViewModel.OneClickCleanAsync();
 
         Assert.True(host.ViewModel.HasExecutionResult);
-        Assert.False(host.ViewModel.HasReviewReport);
-        Assert.Contains("导出清单", host.ViewModel.ReviewHint);
+
+        // 执行本身必须落一份与之严格对应的清单：否则"复核"没有可核对的凭据
+        var executedPlan = host.Executor.LastPlan!;
+        var planDirectory = Path.Combine(host.Settings.ReportDirectory, executedPlan.PlanId);
+        Assert.True(Directory.Exists(planDirectory), $"执行时应写出清单目录：{planDirectory}");
+
+        var csvRows = File.ReadAllLines(Path.Combine(planDirectory, "清单.csv"))
+            .Skip(1)
+            .Count(line => line.Trim().Length > 0);
+        Assert.Equal(executedPlan.PlannedFileCount, csvRows);
+
+        // 并且基于这份清单产出了复核报告
+        Assert.True(host.ViewModel.HasReviewReport);
+    }
+
+    [Fact]
+    public async Task Execute_should_warn_when_executed_set_differs_from_exported_manifest()
+    {
+        var host = new MainViewModelTestHost();
+        await host.ViewModel.InitializeAsync();
+        await host.ViewModel.RescanAsync();
+
+        // 先按默认勾选导出清单（通常只有 L1 + windows-old）
+        await host.ViewModel.ExportManifestAsync();
+        var exportedRowCount = host.ViewModel.ExportedManifestRowCount;
+
+        // 再手动多勾一项，使"执行集合"与"已导出审阅的清单"不一致
+        var extra = host.ViewModel.Items.First(i => !i.IsChecked);
+        extra.IsChecked = true;
+        host.Dialogs.NextConfirmResult = true;
+
+        await host.ViewModel.CleanSelectedAsync();
+
+        Assert.True(host.Executor.LastPlan!.PlannedFileCount > exportedRowCount,
+            "本用例前提是执行集合确实比导出的清单更大");
+        Assert.Contains("不一致", host.ViewModel.StatusMessage);
     }
 
     [Fact]

@@ -53,12 +53,26 @@ public sealed class ScanEngine : IScanEngine
         _selectors = selectors?.Where(selector => selector is not null).ToList() ?? new List<IItemCandidateSelector>();
     }
 
+    /// <summary>
+    /// 扫描入口。**必须跑在线程池上**（这曾经是个真实缺陷）：扫描是纯同步 IO 长任务，
+    /// 若在 UI 线程上同步跑完再返回一个"已完成的任务"，界面会整段冻结、"取消扫描"按钮点不动，
+    /// 进度回调也要等扫描结束才被派发。因此这里统一 <c>Task.Run</c>，让调用方 <c>await</c> 时 UI 仍然响应。
+    /// </summary>
     public Task<ScanReport> ScanAsync(
         ScanRequest request,
         IProgress<ScanProgress>? progress,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        return Task.Run(() => Scan(request, progress, cancellationToken), CancellationToken.None);
+    }
+
+    /// <summary>同步扫描核心（线程池内执行；单测可直接调用）。</summary>
+    internal ScanReport Scan(
+        ScanRequest request,
+        IProgress<ScanProgress>? progress,
+        CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
 
         var now = _clock.Now;
@@ -86,7 +100,11 @@ public sealed class ScanEngine : IScanEngine
                 outcome.SkippedCount,
                 outcome.Files,
                 available,
-                unavailableReason ?? outcome.Note));
+                unavailableReason ?? outcome.Note)
+            {
+                // 明确保留不处理的那一份（例如最近一次蓝屏转储）：必须一路传到清单，用户才看得到"保留：xxx"
+                Kept = outcome.Kept
+            });
 
             progress?.Report(new ScanProgress(item.Id, item.DisplayName, processedBytes, processedFiles));
 
@@ -102,7 +120,7 @@ public sealed class ScanEngine : IScanEngine
             _capacity?.GetTotalBytes(systemVolume) ?? 0,
             _volumes.GetFreeBytes(systemVolume));
 
-        return Task.FromResult(new ScanReport(entries, snapshot, now));
+        return new ScanReport(entries, snapshot, now);
     }
 
     /// <summary>

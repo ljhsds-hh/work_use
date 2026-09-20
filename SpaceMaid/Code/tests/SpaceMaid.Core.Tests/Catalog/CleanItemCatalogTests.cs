@@ -20,6 +20,7 @@ public class CleanItemCatalogTests
         "l1.wer",
         "l1.cbs-logs",
         "l1.dumps",
+        "l1.live-kernel-reports",
         "l1.thumb-cache",
         "l1.packages-temp",
         "l1.app-logs-vscode",

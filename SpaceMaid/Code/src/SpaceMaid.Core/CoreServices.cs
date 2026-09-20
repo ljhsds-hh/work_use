@@ -159,7 +159,7 @@ public sealed class CoreServices
                 SideEffect = definition.SideEffect,
                 Risk = definition.Risk,
                 ActionKind = definition.ActionKind,
-                Kept = Array.Empty<ScanFile>(),
+                Kept = entry.Kept,
                 UnavailableReason = entry.UnavailableReason
             });
         }

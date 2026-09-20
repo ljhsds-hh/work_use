@@ -18,6 +18,7 @@ public class CatalogDepthTests
     {
         "l1.user-temp", "l1.windows-temp", "l1.wu-download", "l1.wer", "l1.cbs-logs",
         "l1.delivery-optimization", "l1.packages-temp", "l1.app-logs-vscode", "l1.app-logs-jetbrains",
+        "l1.live-kernel-reports",
         "l2.browser-cache", "l2.dev-caches", "l2.driver-downloader", "l2.prefetch", "l2.crash-dumps",
         "l3.chat-cache"
     };

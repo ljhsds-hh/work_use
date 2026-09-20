@@ -410,6 +410,12 @@ public sealed class MainViewModel : ViewModelBase
 
     public string ManifestDirectory => _manifestDirectory;
 
+    /// <summary>
+    /// 当前复核基准清单的行数（= 最近一次导出或执行的清单）。
+    /// 用途：执行时与本次执行的集合比对，不一致就在状态栏明确提示——绝不悄悄换掉用户审阅过的基准。
+    /// </summary>
+    public int ExportedManifestRowCount => _manifestIndex?.Rows.Count ?? 0;
+
     // ── 启动编排 ──
 
     /// <summary>
@@ -728,6 +734,7 @@ public sealed class MainViewModel : ViewModelBase
 
         string? planId = null;
         ManifestRowIndex? reviewIndex = null;
+        var reviewBasisChanged = false;
 
         if (needsConfirmation)
         {
@@ -754,6 +761,28 @@ public sealed class MainViewModel : ViewModelBase
             var plan = BuildPlanFor(checkedItems);
             planId = plan.PlanId;
 
+            // ① 先把"本次真正要执行的集合"落成清单。复核必须与它严格对应——否则用户导出清单后又改了勾选，
+            //    被搬走的文件不会出现在任何报告里，复核会给出"异常：0"的假结论（对抗式评审 F-4）。
+            ManifestPaths executedPaths;
+            try
+            {
+                executedPaths = await Task.Run(() => _bridge.WriteManifest(plan)).ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                // 写不出凭据就**不执行**：没有清单的删除是不可复核的
+                StatusMessage = $"无法写出本次执行的清单，已中止执行（没有清单的删除不可复核）：{ex.Message}";
+                ProgressText = StatusMessage;
+                _notifications.Notify(StatusMessage);
+                return;
+            }
+
+            // ② 复核基准 = 本次执行的清单（而不是早先那份可能已经过期的导出）
+            reviewIndex = _bridge.BuildManifestIndex(plan, executedPaths.Directory);
+            reviewBasisChanged = _manifestIndex is not null && _manifestIndex.Rows.Count != plan.PlannedFileCount;
+            _manifestIndex = reviewIndex;
+            _manifestDirectory = executedPaths.Directory;
+
             var options = _bridge.BuildExecutionOptions(authorizeHibernate);
             var progress = new Progress<CleanProgress>(p =>
                 ProgressText = $"正在处理：{p.DisplayName}（{p.ProcessedFiles}/{p.TotalFiles} 个文件，{FormatBytes(p.ProcessedBytes)}）");
@@ -762,19 +791,12 @@ public sealed class MainViewModel : ViewModelBase
 
             ShowExecutionResult(report, plan);
 
-            // 复核只针对"导出过的那份清单"：没导出就不生成报告，绝不悄悄补一份（需求 3.9-1/3）
-            reviewIndex = _manifestIndex is null ? null : _bridge.ReadManifest(_manifestIndex.Directory);
-            if (reviewIndex is not null)
-            {
-                var review = _bridge.Review(reviewIndex, report.MovedBytes, report.SameVolume);
-                ReviewReportPath = review.MarkdownPath;
-                StatusMessage += $" 复核报告已生成：{review.MarkdownPath}";
-            }
-            else
-            {
-                ReviewHint = "本次没有先导出清单，因此没有生成复核报告。请先「导出清单」并人工审阅，再执行清理。";
-                OnPropertyChanged(nameof(ReviewHint));
-            }
+            // ③ 按本次执行的清单复核；若与用户先前审阅的清单不一致，明确告知（绝不悄悄换基准）
+            var review = _bridge.Review(reviewIndex, report.MovedBytes, report.SameVolume);
+            ReviewReportPath = review.MarkdownPath;
+            StatusMessage += reviewBasisChanged
+                ? $" 注意：本次执行的集合与你先前导出审阅的清单**不一致**（勾选被改动过），复核报告以本次执行的清单为准。报告：{review.MarkdownPath}"
+                : $" 复核报告已生成：{review.MarkdownPath}";
         }
         catch (Exception ex)
         {
@@ -794,7 +816,11 @@ public sealed class MainViewModel : ViewModelBase
 
         if (reviewIndex is not null)
         {
-            StatusMessage = $"清单 {planId} 已执行并完成复核。如果复核报告里还有异常项，请逐条确认后再结束本次清理。";
+            // 保留"执行集合与已审阅清单不一致"的提示：它是本次清理最需要用户知道的一句话
+            StatusMessage = $"清单 {planId} 已执行并完成复核。如果复核报告里还有异常项，请逐条确认后再结束本次清理。"
+                            + (reviewBasisChanged
+                                ? " 注意：本次执行的集合与你先前导出审阅的清单不一致（勾选被改动过），复核报告以本次执行的清单为准。"
+                                : string.Empty);
             ProgressText = StatusMessage;
             ReviewHint = "复核报告已生成，点「查看复核报告」打开。";
             OnPropertyChanged(nameof(ReviewHint));

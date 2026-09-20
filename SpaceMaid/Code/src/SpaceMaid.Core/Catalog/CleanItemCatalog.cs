@@ -86,14 +86,19 @@ public static class CleanItemCatalog
         L1(
             "l1.dumps",
             "内核与蓝屏转储",
-            "保留最近一次蓝屏转储（最新的 MEMORY.DMP 或最新的一个 Minidump），更早的转储全部清除；LiveKernelReports 里的内核实时报告没有分析价值，全部清除。如果以后还要排查蓝屏，就只剩最近这一次现场可用了。",
+            "保留最近一次蓝屏转储（最新的 MEMORY.DMP 或最新的一个 Minidump），更早的转储全部清除。如果以后还要排查蓝屏，就只剩最近这一次现场可用了。",
             new[]
             {
                 TargetRule.File(@"%SystemRoot%\MEMORY.DMP"),
-                TargetRule.Glob(@"%SystemRoot%\Minidump", "*.dmp"),
-                TargetRule.Contents(@"%SystemRoot%\LiveKernelReports")
+                TargetRule.Glob(@"%SystemRoot%\Minidump", "*.dmp")
             },
             keepsNewest: true),
+
+        L1(
+            "l1.live-kernel-reports",
+            "内核实时报告",
+            "LiveKernelReports 里是系统在「可恢复的内核异常」时留下的实时报告，没有蓝屏分析价值，全部清除。它与「保留最近一次蓝屏转储」是两件事，所以单独列一项，避免它把该保留的那一次转储挤掉。",
+            new[] { TargetRule.Contents(@"%SystemRoot%\LiveKernelReports") }),
 
         L1(
             "l1.thumb-cache",
