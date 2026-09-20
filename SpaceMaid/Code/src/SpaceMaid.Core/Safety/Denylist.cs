@@ -59,6 +59,22 @@ public static class Denylist
         "System Volume Information"
     };
 
+    /// <summary>
+    /// 是否命中"禁止目录树"（System32 / Program Files / WinSxS …）。
+    /// 与 <see cref="IsDeniedUserRoot"/> 区分开，供清单自检使用：清理项目的**目标根**绝不能落在禁止目录树里。
+    /// </summary>
+    public static bool IsDeniedTree(string normalizedPath) =>
+        !string.IsNullOrWhiteSpace(normalizedPath)
+        && DeniedTrees.Any(tree => PathNormalizer.IsSameOrUnder(normalizedPath, tree));
+
+    /// <summary>
+    /// 是否**精确等于**某个用户目录根本身（桌面/文档/下载/AppData…）。
+    /// 用户目录根本身不允许被当作删除目标，但其下具体文件可以（由清理项的枚举方式和 SafetyGate 子路径判定兜底）。
+    /// </summary>
+    public static bool IsDeniedUserRoot(string normalizedPath) =>
+        !string.IsNullOrWhiteSpace(normalizedPath)
+        && DeniedUserRoots.Any(root => normalizedPath.Equals(root, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>禁止清单判定。入参应为已规范化的绝对路径。</summary>
     public static bool IsDenied(string normalizedPath)
     {
