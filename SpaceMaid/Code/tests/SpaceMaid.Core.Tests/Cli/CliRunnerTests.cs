@@ -102,6 +102,41 @@ public class CliRunnerTests
     }
 
     [Fact]
+    public void Dry_run_must_not_release_expired_quarantine_batches()
+    {
+        using var root = new TempRoot();
+        var junk = root.WriteFile(@"Temp\junk.tmp", "junk");
+
+        // 先用"时间已经过去 8 天"的视角造一个到期批次（直接调内核服务隔离一个文件）
+        var past = DateTimeOffset.Now.AddDays(-8);
+        var pastServices = CoreServices.Create(
+            new AppSettings { QuarantineBasePath = root.Combine("quarantine"), LogDirectory = root.Combine("logs"), ReportDirectory = root.Combine("reports") },
+            fileSystem: new SpaceMaid.Core.Platform.WindowsFileSystem(),
+            clock: new FakeClock(past),
+            volumes: new MappedVolumeProbe(),
+            environment: new TempCliProbe(root.Path),
+            commandRunner: new SpaceMaid.Core.Tests.Execution.FakeCommandRunner(),
+            log: SilentLogSink.Instance);
+
+        var victim = root.WriteFile(@"Temp\old.tmp", "old");
+        var stored = pastServices.Quarantine.Store(pastServices.QuarantineRoot, 7, new[]
+        {
+            new SpaceMaid.Core.Models.PlannedFile("l1.user-temp", SpaceMaid.Core.Models.CleanCategory.L1OneClick, victim, 3, past)
+        });
+        var payload = Path.Combine(stored.BatchDirectory, stored.StoredEntries.Single().StoredAs);
+        Assert.True(File.Exists(payload));
+
+        // 现在回到"今天"跑只读 dry-run：到期批次**不允许**被释放，否则它就违背了"不做任何删除"的承诺
+        var services = CreateServices(root);
+        var result = new CliRunner(services).Run(CliOptions.Parse(new[] { "--dry-run" }));
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.True(File.Exists(payload), "只读 CLI 不得释放任何隔离批次");
+        Assert.Equal(1, services.Quarantine.Inspect(services.QuarantineRoot).ExpiredBatchCount);
+        Assert.True(File.Exists(junk));
+    }
+
+    [Fact]
     public void Report_should_fail_cleanly_on_missing_manifest()
     {
         using var root = new TempRoot();

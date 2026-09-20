@@ -133,7 +133,9 @@ public sealed class CoreServicesBridge(CoreServices services) : ICoreBridge
 
     public bool IsElevated => _services.Environment.IsElevated;
 
-    public StartupPreparation Prepare() => _services.Prepare();
+    // 界面启动时才是"用户真的要用这个工具"，允许做删除类维护（日志滚动、账本自检、到期批次释放）；
+    // 只读 CLI（--dry-run/--report）走内核默认参数，不做任何删除。
+    public StartupPreparation Prepare() => _services.Prepare(allowDestructiveMaintenance: true);
 
     public CleanPlan BuildPlan(ScanReport scan, IReadOnlySet<string> checkedItemIds)
     {

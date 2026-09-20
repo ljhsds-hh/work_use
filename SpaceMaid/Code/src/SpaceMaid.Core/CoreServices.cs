@@ -182,15 +182,29 @@ public sealed class CoreServices
     }
 
     /// <summary>
-    /// 启动准备：日志滚动 → 隔离区账本自检 → 到期批次惰性释放 → 隔离区路径校验。
-    /// 必须在界面出现之前调用一次（无常驻进程，"定时"语义只能落在这里）。
+    /// 启动准备：隔离区路径校验（只读）+ 可选的破坏性维护（日志滚动、账本自检、到期批次惰性释放）。
+    ///
+    /// **为什么破坏性维护要显式开启**：CLI 的 <c>--dry-run</c> / <c>--report</c> 对外承诺"不删除任何东西"，
+    /// 而惰性释放会把到期批次**永久删除**、账本自检在"两边都在"时也会删副本、日志滚动会删旧日志。
+    /// 因此只读调用方一律用默认参数（<paramref name="allowDestructiveMaintenance"/> = false）；
+    /// 只有界面在用户明确启动工具时才传 true。
     /// </summary>
-    public StartupPreparation Prepare()
+    /// <param name="allowDestructiveMaintenance">是否允许删除类维护动作（界面为 true，只读 CLI 为 false）。</param>
+    public StartupPreparation Prepare(bool allowDestructiveMaintenance = false)
     {
-        LogHousekeeping.PruneOldLogs(Settings.LogDirectory, Settings.LogRetentionDays, Clock, FileSystem, Log);
+        var recovery = new RecoverReport(0, 0, 0, Array.Empty<string>());
+        var release = new ReleaseResult(0, 0, 0, Array.Empty<string>());
 
-        var recovery = Quarantine.Recover(QuarantineRoot);
-        var release = Quarantine.ReleaseExpired(QuarantineRoot);
+        if (allowDestructiveMaintenance)
+        {
+            LogHousekeeping.PruneOldLogs(Settings.LogDirectory, Settings.LogRetentionDays, Clock, FileSystem, Log);
+            recovery = Quarantine.Recover(QuarantineRoot);
+            release = Quarantine.ReleaseExpired(QuarantineRoot);
+        }
+        else
+        {
+            Log.Info("只读模式：跳过日志滚动、账本自检与到期批次释放（不删除任何文件）");
+        }
 
         var validation = PathValidator.Validate(
             Settings.QuarantineBasePath,
