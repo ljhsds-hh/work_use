@@ -315,6 +315,13 @@ public sealed class WindowsFileSystem : IFileSystem
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// **判定失败时的方向必须是保守的**（对抗式评审 F-7）：
+    /// 路径确实不存在 ⇒ 没有东西可搬，返回 false；
+    /// 路径存在但属性读不出来（被拒绝访问、IO 异常）⇒ **无法证明它不是链接，返回 true**，
+    /// 让 SafetyGate 直接拒绝——否则"异常被吞成 false"会让设计文档里那句
+    /// "检测抛异常时按不安全处理"在生产实现下永远不生效。
+    /// </remarks>
     public bool IsReparsePoint(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -327,11 +334,18 @@ public sealed class WindowsFileSystem : IFileSystem
             FileAttributes attributes = File.GetAttributes(path);
             return (attributes & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint;
         }
+        catch (FileNotFoundException)
+        {
+            return false;   // 不存在 ⇒ 无可搬运对象
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return false;
+        }
         catch (Exception)
         {
-            // 路径不存在或不可访问：无法证明它是链接，按"不是"处理；
-            // 真正的安全判定在 SafetyGate 的存在性/白名单环节完成。
-            return false;
+            // 存在但读不到属性：按"是链接"这一保守方向处理
+            return true;
         }
     }
 
@@ -364,7 +378,8 @@ public sealed class WindowsFileSystem : IFileSystem
         }
         catch (Exception)
         {
-            return false;
+            // 连路径都规范化不了：按"不安全"处理（保守方向），交给 SafetyGate 拒绝
+            return true;
         }
     }
 

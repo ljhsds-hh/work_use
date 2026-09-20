@@ -606,8 +606,11 @@ public sealed class MainViewModel : ViewModelBase
 
     private void RefreshCheckedSummary()
     {
-        CheckedCount = Items.Count(i => i.IsChecked);
-        CheckedBytes = Items.Where(i => i.IsChecked).Sum(i => i.TotalBytes);
+        // 信息项（页面文件，需求 2.4 明确"仅展示、不可清理"）不能计入"已勾选 N 项 / 合计 X"，
+        // 否则确认框会承诺一个永远不会被清理的体积（对抗式评审 F-14）。
+        var countable = Items.Where(i => i.IsChecked && !i.IsInformationalOnly).ToList();
+        CheckedCount = countable.Count;
+        CheckedBytes = countable.Sum(i => i.TotalBytes);
     }
 
     /// <summary>当前勾选项对应的 Id 集合（显式给出，避免"没勾任何项"被误当成"用默认"）。</summary>
@@ -690,7 +693,7 @@ public sealed class MainViewModel : ViewModelBase
     /// <summary>清理选中项（需求 3.3 / 3.9-3）：按勾选执行，执行前必须完成二次确认。</summary>
     public Task CleanSelectedAsync()
     {
-        var checkedItems = Items.Where(i => i.IsChecked).ToList();
+        var checkedItems = Items.Where(i => i.IsChecked && !i.IsInformationalOnly).ToList();
         if (checkedItems.Count == 0)
         {
             StatusMessage = "还没有勾选任何项，请先在清单里选择；L1 项请用「一键清理（L1）」。";

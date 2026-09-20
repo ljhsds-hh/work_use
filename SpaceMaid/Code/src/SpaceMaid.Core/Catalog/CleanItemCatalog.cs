@@ -302,14 +302,17 @@ public static class CleanItemCatalog
             "l3.chat-cache",
             "聊天工具文件缓存",
             ItemRisk.Dangerous,
-            "这些目录里极可能包含你要保留的聊天文件、图片与视频（微信的 FileStorage、Image、Video 都在其中）；删除后聊天软件里的旧文件需要重新从服务器或对方重新下载，对方已经不在线时可能再也拿不回来。所以默认不勾，请先打开目录确认。",
+            "**范围刻意收窄**到聊天软件的缓存子目录：微信的 FileStorage\\Cache / Image / Video，以及腾讯系应用根目录下的 Cache。"
+            + "聊天记录数据库、账号配置与「接收的文件」目录（例如 QQ 的 FileRecv）都**不在**范围内——那些是你的数据，不是缓存。"
+            + "即使如此这些目录里仍可能有你要留的图片/视频：删除后旧文件需要重新从服务器或对方下载，对方已不在线时可能再也拿不回来。所以默认不勾，请先打开目录确认。",
             new[]
             {
-                TargetRule.Contents(@"%USERPROFILE%\Documents\WeChat Files"),
-                TargetRule.Contents(@"%USERPROFILE%\Documents\Tencent Files"),
-                TargetRule.Contents(@"%APPDATA%\Tencent")
+                TargetRule.ContentsUnder(@"%USERPROFILE%\Documents\WeChat Files", @"*\FileStorage\Cache"),
+                TargetRule.ContentsUnder(@"%USERPROFILE%\Documents\WeChat Files", @"*\FileStorage\Image"),
+                TargetRule.ContentsUnder(@"%USERPROFILE%\Documents\WeChat Files", @"*\FileStorage\Video"),
+                TargetRule.ContentsUnder(@"%APPDATA%\Tencent", @"*\Cache")
             },
-            actionNote: "可能包含你要保留的聊天文件",
+            actionNote: "范围收窄到缓存子目录，仍可能含你要保留的图片视频",
             restoreHint: "可从隔离区还原（保留期内）；清除后旧文件需重新从服务器或对方下载"),
 
         L3(

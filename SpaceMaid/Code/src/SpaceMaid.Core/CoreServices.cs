@@ -195,6 +195,27 @@ public sealed class CoreServices
         var recovery = new RecoverReport(0, 0, 0, Array.Empty<string>());
         var release = new ReleaseResult(0, 0, 0, Array.Empty<string>());
 
+        // 先校验隔离区路径，再做破坏性维护（对抗式评审 F-8）：
+        // 此前顺序反了——先按（可能来自用户可写 settings.json 的）路径删东西，再用校验结果生成一句提示。
+        // 路径不合格时**一个删除动作都不做**。
+        var validation = PathValidator.Validate(
+            Settings.QuarantineBasePath,
+            requiredBytes: 0,
+            sourceVolumeOf: Environment.SystemDrive + Path.DirectorySeparatorChar,
+            volumes: Volumes,
+            fileSystem: FileSystem,
+            environment: Environment);
+
+        if (!validation.IsUsable)
+        {
+            Log.Warn($"隔离区路径不可用，已跳过全部删除类维护：{validation.Message}（{validation.Detail}）");
+            return new StartupPreparation(
+                new RecoverReport(0, 0, 0, new[] { $"隔离区不可用，已跳过错峰自检：{validation.Message}" }),
+                new ReleaseResult(0, 0, 0, new[] { $"隔离区不可用，已跳过到期释放：{validation.Message}" }),
+                false,
+                validation.Message);
+        }
+
         if (allowDestructiveMaintenance)
         {
             LogHousekeeping.PruneOldLogs(Settings.LogDirectory, Settings.LogRetentionDays, Clock, FileSystem, Log);
@@ -205,14 +226,6 @@ public sealed class CoreServices
         {
             Log.Info("只读模式：跳过日志滚动、账本自检与到期批次释放（不删除任何文件）");
         }
-
-        var validation = PathValidator.Validate(
-            Settings.QuarantineBasePath,
-            requiredBytes: 0,
-            sourceVolumeOf: Environment.SystemDrive + Path.DirectorySeparatorChar,
-            volumes: Volumes,
-            fileSystem: FileSystem,
-            environment: Environment);
 
         return new StartupPreparation(recovery, release, validation.IsUsable, validation.Message);
     }
@@ -238,9 +251,13 @@ public sealed class CoreServices
 
         var logSink = log ?? new FileLogSink(effectiveSettings.LogDirectory, clockInstance);
 
-        var recycleRoots = RecycleBinTargets.BuildRoots(
-            environmentInstance,
-            effectiveSettings.IncludeOtherDriveRecycleBin ? otherDriveRoots : null);
+        // "非系统盘回收站也纳入"必须真的生效（对抗式评审 F-9）：此前它是个空开关——
+        // 生产调用方不传 otherDriveRoots，而扫描引擎又把 includeOtherDrives 硬编码成 false。
+        var otherDrives = effectiveSettings.IncludeOtherDriveRecycleBin
+            ? otherDriveRoots ?? EnumerateOtherFixedDrives(environmentInstance.SystemDrive)
+            : null;
+
+        var recycleRoots = RecycleBinTargets.BuildRoots(environmentInstance, otherDrives);
         var recycleBin = new RecycleBinTargets(fileSystemInstance, recycleRoots, logSink);
 
         return new CoreServices(
@@ -253,5 +270,23 @@ public sealed class CoreServices
             environmentInstance,
             commandRunner ?? new ProcessCommandRunner(),
             recycleBin);
+    }
+
+    /// <summary>枚举本机除系统盘以外的固定磁盘根（例如 "D:"）。无权限或异常时返回空列表。</summary>
+    private static IReadOnlyList<string> EnumerateOtherFixedDrives(string systemDrive)
+    {
+        try
+        {
+            return DriveInfo.GetDrives()
+                .Where(drive => drive.DriveType == DriveType.Fixed)
+                .Select(drive => drive.RootDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar))
+                .Where(root => !string.IsNullOrWhiteSpace(root)
+                               && !root.Equals(systemDrive.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+        catch (Exception)
+        {
+            return Array.Empty<string>();
+        }
     }
 }

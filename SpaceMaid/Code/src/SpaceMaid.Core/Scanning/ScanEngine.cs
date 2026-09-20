@@ -149,7 +149,7 @@ public sealed class ScanEngine : IScanEngine
                     return (candidates, "回收站扫描器未启用");
                 }
 
-                candidates.AddRange(_recycleBin.Scan(includeOtherDrives: false));
+                candidates.AddRange(_recycleBin.Scan(includeOtherDrives: includeRecycleBin));
                 continue;
             }
 

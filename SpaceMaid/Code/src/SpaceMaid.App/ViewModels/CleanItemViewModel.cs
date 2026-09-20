@@ -106,9 +106,11 @@ public sealed class CleanItemViewModel : ViewModelBase
 
     /// <summary>
     /// L1 没有勾选框（它随"一键清理"执行，需求 2.2）；
-    /// L2 / L3 / 回收站必须可勾选（需求 3.3-1）。
+    /// **信息项（页面文件）也没有勾选框**——需求 2.4 明确它是"仅展示、不可清理"，
+    /// 给它一个勾选框会让用户以为能清、并且把它算进"本次可处理"的体积里（对抗式评审 F-14）；
+    /// 其余 L2 / L3 / 回收站必须可勾选（需求 3.3-1）。
     /// </summary>
-    public bool ShowCheckBox => Category != CleanCategory.L1OneClick;
+    public bool ShowCheckBox => Category != CleanCategory.L1OneClick && !IsInformationalOnly;
 
     /// <summary>命令型动作（休眠 / DISM）：不是搬文件，界面上要能区分。</summary>
     public bool IsCommandAction => ActionKind is CleanActionKind.HibernateOff or CleanActionKind.DismComponentCleanup;
@@ -128,7 +130,10 @@ public sealed class CleanItemViewModel : ViewModelBase
         get => _isChecked;
         set
         {
-            if (SetProperty(ref _isChecked, value))
+            // 没有勾选框的项（L1、以及"只展示不可清理"的信息项）不允许被勾选：
+            // 否则它会悄悄计入"已勾选 N 项 / 合计 X"，让确认框承诺一个永远不会被清理的体积（F-14）。
+            var effective = ShowCheckBox && value;
+            if (SetProperty(ref _isChecked, effective))
             {
                 OnCheckedChanged?.Invoke();
             }

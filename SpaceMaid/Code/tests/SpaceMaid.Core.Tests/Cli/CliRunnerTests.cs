@@ -97,6 +97,11 @@ public class CliRunnerTests
         Assert.True(File.Exists(result.Artifacts[0]));
         Assert.Contains("复核完成", result.Message);
 
+        // 复核必须给出真实的"实际效果"，而不是固定 0 B（对抗式评审 F-16）
+        Assert.Contains("实际效果：", result.Message);
+        Assert.DoesNotContain("实际效果：已释放 0 B", result.Message);
+        Assert.DoesNotContain("实际效果：已移入隔离区 0 B", result.Message);
+
         var report = File.ReadAllText(result.Artifacts[0]);
         Assert.Contains("清单文件数：1", report);
     }
