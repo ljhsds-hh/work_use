@@ -129,6 +129,9 @@ Windows 桌面 C 盘（系统盘）空间清理工具（work_use 工具集之一
 | `Catalog_should_not_hardcode_drive_letters` | `CleanItemCatalog.cs` 里没有形如 `"X:\` 的硬编码盘符 |
 | `Catalog_should_have_no_violations` | `CatalogValidator.Validate(CleanItemCatalog.All)` 返回空列表 |
 | `Source_root_should_be_discovered` | 从 `AppContext.BaseDirectory` 向上能找到 `src/SpaceMaid.Core` |
+| `Core_should_not_read_bypass_style_environment_variables` | 内核不读名字含 `disable` / `skip` / `bypass` / `force` / `ignore` / `unsafe` / `nocheck` 的环境变量（I-6 的第二个入口；读 `SystemDrive` 这类系统变量不受影响） |
+
+**界面侧同样有 5 条**（`ReadAppSources()` / `ReadAppXaml()`，都在同一个 `StaticSafetyTests` 里）：`App_should_not_contain_delete_calls`（界面**零容忍**，一个删除调用都不许有）、`App_should_not_offer_bypass_switches_or_reset_base`、`App_should_not_own_a_command_runner`（界面不得持有执行命令的能力）、`App_xaml_should_not_hardcode_colors`（界面 XAML 不得出现 `#RRGGBB` / `Color=` / `SolidColorBrush`——颜色只能取 HandyControl 皮肤资源或设计令牌）、`App_source_root_should_be_discovered`。整组当前共 **17** 条。
 
 **这条规则已于 2026-09-20 收紧（改动前必读）**：`Core_should_not_use_component_store_reset_base` 现在断言的是**裸字串** `ResetBase`（不区分大小写）在整个 Core 源码中都不出现——原来的带斜杠写法"看着通过"，却拦不住有人把开关当成参数拼进命令。为满足收紧后的规则，`l3.component-store` 的文案已改为「本工具不提供「重置基线」选项」，不再出现英文开关名。
 

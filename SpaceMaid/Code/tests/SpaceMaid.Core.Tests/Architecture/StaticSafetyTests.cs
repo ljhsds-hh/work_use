@@ -337,5 +337,49 @@ public class StaticSafetyTests
     {
         Assert.True(Directory.Exists(AppSourceRoot), $"找不到界面源码目录：{AppSourceRoot}");
         Assert.NotEmpty(ReadAppSources());
+        Assert.NotEmpty(ReadAppXaml());
     }
+
+    /// <summary>
+    /// 界面 XAML 里不得出现硬编码颜色（需求 5.3：颜色与字体走 HandyControl 皮肤与设计令牌）。
+    ///
+    /// 为什么把这条从"人工看一遍"变成自动断言：界面的手写十六进制色值是最容易在评审里溜过去的一类问题——
+    /// 看图看不出 `#FF5722` 和 `DangerBrush` 的差别，但深色皮肤一切换就露馅，而且它会绕开主题。
+    /// 读的是 `.xaml` 文本，所以 `#[0-9A-Fa-f]{3,8}` 与 `Color=` / `<SolidColorBrush>` 三种写法都拦得住。
+    /// </summary>
+    [Fact]
+    public void App_xaml_should_not_hardcode_colors()
+    {
+        var colorPattern = new Regex(@"#[0-9A-Fa-f]{3,8}\b");
+        var offenders = new List<string>();
+
+        foreach (var (file, text) in ReadAppXaml())
+        {
+            foreach (Match match in colorPattern.Matches(text))
+            {
+                offenders.Add($"{file}: {match.Value}");
+            }
+
+            if (text.Contains("Color=", StringComparison.Ordinal))
+            {
+                offenders.Add($"{file}: 出现 Color= 直接定义色值");
+            }
+
+            if (text.Contains("SolidColorBrush", StringComparison.Ordinal))
+            {
+                offenders.Add($"{file}: 出现 SolidColorBrush 直接定义画刷");
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "界面 XAML 不得硬编码颜色（应使用 HandyControl 皮肤的动态资源或 DesignTokens 令牌）：" + string.Join("；", offenders));
+    }
+
+    private static IReadOnlyList<(string File, string Text)> ReadAppXaml() =>
+        Directory
+            .EnumerateFiles(AppSourceRoot, "*.xaml", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+                           && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Select(path => (Path.GetRelativePath(AppSourceRoot, path), File.ReadAllText(path)))
+            .ToList();
 }
