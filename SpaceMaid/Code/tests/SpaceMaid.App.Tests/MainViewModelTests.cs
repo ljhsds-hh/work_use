@@ -398,6 +398,77 @@ public class MainViewModelTests
         Assert.DoesNotContain(host.ViewModel.Items.Where(i => i.IsChecked), i => i.ItemId == "l3.pagefile");
     }
 
+    // ── 需求 3.4-5：启动时提示"隔离区有 X 已到期"（惰性释放，放掉了 / 没放掉要分开说）──
+
+    [Fact]
+    public void Expired_notice_should_say_released_only_when_it_was_actually_released()
+    {
+        var release = Release(batches: 2, files: 30, bytes: 5L * 1024 * 1024 * 1024);
+
+        var text = MainViewModel.DescribeExpiredQuarantine(release, Info(expiredBatches: 0, expiredBytes: 0));
+
+        Assert.NotNull(text);
+        Assert.Contains("已到期", text);
+        Assert.Contains("已自动释放 2 个批次", text);
+        Assert.Contains("5 GB", text);
+    }
+
+    [Fact]
+    public void Expired_notice_should_report_leftovers_instead_of_claiming_success()
+    {
+        // 释放失败（文件被占用 / 权限不足）是真实会发生的：这时**不许**说"已释放"
+        var release = Release(batches: 0, files: 0, bytes: 0);
+        var afterRelease = Info(expiredBatches: 1, expiredBytes: 3L * 1024 * 1024 * 1024);
+
+        var text = MainViewModel.DescribeExpiredQuarantine(release, afterRelease);
+
+        Assert.NotNull(text);
+        Assert.Contains("未释放", text);
+        Assert.Contains("3 GB", text);
+        Assert.Contains("立即清空", text);          // 指出处理入口，而不是只说一句"有问题"
+        Assert.DoesNotContain("已自动释放", text);
+    }
+
+    [Fact]
+    public void Expired_notice_should_be_silent_when_nothing_expired()
+    {
+        var text = MainViewModel.DescribeExpiredQuarantine(
+            Release(batches: 0, files: 0, bytes: 0),
+            Info(expiredBatches: 0, expiredBytes: 0));
+
+        Assert.Null(text);
+    }
+
+    [Fact]
+    public void Expired_notice_should_not_break_startup_when_quarantine_is_unreadable()
+    {
+        // 读不到隔离区现状时退回"是否释放过"这个已知信息，绝不抛异常打断启动
+        var text = MainViewModel.DescribeExpiredQuarantine(
+            Release(batches: 1, files: 4, bytes: 1024L * 1024 * 1024),
+            afterRelease: null);
+
+        Assert.NotNull(text);
+        Assert.Contains("已自动释放", text);
+    }
+
+    private static ReleaseResult Release(int batches, int files, long bytes) =>
+        new(batches, files, bytes, Array.Empty<string>());
+
+    private static QuarantineInfo Info(int expiredBatches, long expiredBytes)
+    {
+        var batches = Enumerable.Range(0, expiredBatches)
+            .Select(i => new BatchInfo(
+                $"20260101-00000{i}-000",
+                new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.FromHours(8)),
+                new DateTimeOffset(2026, 1, 2, 0, 0, 0, TimeSpan.FromHours(8)),
+                expiredBatches == 0 ? 0 : expiredBytes / expiredBatches,
+                1,
+                Expired: true))
+            .ToList();
+
+        return new QuarantineInfo(batches, expiredBytes, expiredBatches);
+    }
+
     // ── 需求 3.3-3：全选/反选只作用于当前分级 ──
 
     [Fact]

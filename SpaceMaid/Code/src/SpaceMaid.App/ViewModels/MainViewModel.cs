@@ -437,22 +437,31 @@ public sealed class MainViewModel : ViewModelBase
         var preparation = _bridge.Prepare();
         _preparation = preparation;
 
+        // 需求 3.4-5 要求"界面在启动时提示：隔离区有 X GB 已到期，可释放"。
+        // 本工具无常驻进程（2.1），所以"到期释放"只能落在启动这一步的惰性释放里——
+        // 释放完再查就查不到了，于是释放后立刻回读一次，区分两种结果并如实播报：
+        //   ① 放掉了      -> "有 X 已到期，本次已自动释放 N 个批次"
+        //   ② 没放掉      -> "仍有 X 已到期但未释放"（文件被占用/权限不足），并指出处理入口
+        // 读不到隔离区现状不算错误：它只是提示，不能反过来打断启动。
+        var expiredAfter = TryInspectQuarantine();
+
         var lines = new List<string>();
         if (preparation.Recovery.StoredRecovered > 0 || preparation.Recovery.MarkedUnknown > 0 || preparation.Recovery.PendingCleared > 0)
         {
             lines.Add($"隔离区账本自检：补记 {preparation.Recovery.StoredRecovered} 条、异常 {preparation.Recovery.MarkedUnknown} 条、清理待定 {preparation.Recovery.PendingCleared} 条");
         }
 
-        if (preparation.Release.ReleasedBatches > 0)
+        var expiredNotice = DescribeExpiredQuarantine(preparation.Release, expiredAfter);
+        if (expiredNotice is not null)
         {
-            lines.Add($"已到期自动释放：{preparation.Release.ReleasedBatches} 个批次、{FormatBytes(preparation.Release.ReleasedBytes)}");
+            lines.Add(expiredNotice);
         }
 
         lines.Add(preparation.QuarantineMessage);
         StartupStatusMessage = MessageText.Join(lines);
         StatusMessage = StartupStatusMessage;
 
-        if (preparation.Release.ReleasedBatches > 0 || preparation.Recovery.MarkedUnknown > 0)
+        if (expiredNotice is not null || preparation.Recovery.MarkedUnknown > 0)
         {
             _notifications.Notify(StartupStatusMessage);
         }
@@ -461,6 +470,40 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(ReportRoot));
         OnPropertyChanged(nameof(SameVolumeNotice));
         return preparation;
+    }
+
+    private QuarantineInfo? TryInspectQuarantine()
+    {
+        try
+        {
+            return _bridge.InspectQuarantine();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 生成"隔离区到期"的启动提示（需求 3.4-5）。没有任何到期批次时返回 <c>null</c>（不打扰用户）。
+    ///
+    /// 两种措辞严格区分，不许混用：**放掉了**才可以说"已自动释放"；**没放掉**只能说"仍有已到期但未释放"。
+    /// 后者是真实会发生的（隔离区文件被占用、权限不足），这时候说"已释放"就是谎报。
+    /// </summary>
+    public static string? DescribeExpiredQuarantine(ReleaseResult release, QuarantineInfo? afterRelease)
+    {
+        var leftoverBytes = afterRelease?.Batches.Where(b => b.Expired).Sum(b => b.TotalBytes) ?? 0;
+        if (afterRelease is { ExpiredBatchCount: > 0 })
+        {
+            return $"隔离区仍有 {FormatBytes(leftoverBytes)} 已到期但未释放（{afterRelease.ExpiredBatchCount} 个批次），可在设置页「立即清空隔离区」处理";
+        }
+
+        if (release.ReleasedBatches > 0)
+        {
+            return $"隔离区有 {FormatBytes(release.ReleasedBytes)} 已到期，本次已自动释放 {release.ReleasedBatches} 个批次";
+        }
+
+        return null;
     }
 
     /// <summary>兼容异步调用点（自检本身是同步的惰性工作）。</summary>
