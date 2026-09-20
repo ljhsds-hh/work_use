@@ -109,7 +109,7 @@ public static class CleanItemCatalog
             "l1.packages-temp",
             "应用包临时目录",
             "只处理各应用包目录下的 LocalCache\\Temp：这些都是应用自己生成的临时文件，应用会重新生成；你的应用数据与设置不在这里，不会被清掉。",
-            new[] { new TargetRule { Kind = TargetKind.DirectoryContents, Path = @"%LOCALAPPDATA%\Packages", Pattern = "LocalCache" } }),
+            new[] { TargetRule.ContentsUnder(@"%LOCALAPPDATA%\Packages", @"*\LocalCache\Temp") }),
 
         L1(
             "l1.app-logs-vscode",
@@ -121,7 +121,7 @@ public static class CleanItemCatalog
             "l1.app-logs-jetbrains",
             "JetBrains 系列 IDE 日志缓存",
             "只删除 JetBrains 系列 IDE 的日志目录，下次启动会重新生成；你的项目、设置与插件都不受影响。",
-            new[] { new TargetRule { Kind = TargetKind.DirectoryContents, Path = @"%LOCALAPPDATA%\JetBrains", Pattern = "log" } }),
+            new[] { TargetRule.ContentsUnder(@"%LOCALAPPDATA%\JetBrains", @"*\log") }),
 
         // ── L2 推荐清理：用户数据或可再下载资源，绝大多数默认不勾（需求 2.3） ──
         L2(
@@ -131,13 +131,13 @@ public static class CleanItemCatalog
             "只清理网页缓存文件，浏览器会重新缓存；不会删除密码、书签与历史记录（Cookie 与登录态是单独一项，默认不勾）。",
             new[]
             {
-                TargetRule.Contents(@"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default\Cache"),
-                TargetRule.Contents(@"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default\Code Cache"),
-                TargetRule.Contents(@"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default\GPUCache"),
-                TargetRule.Contents(@"%LOCALAPPDATA%\Google\Chrome\User Data\Default\Cache"),
-                TargetRule.Contents(@"%LOCALAPPDATA%\Google\Chrome\User Data\Default\Code Cache"),
-                TargetRule.Contents(@"%LOCALAPPDATA%\Google\Chrome\User Data\Default\GPUCache"),
-                new TargetRule { Kind = TargetKind.DirectoryContents, Path = @"%LOCALAPPDATA%\Mozilla\Firefox\Profiles", Pattern = "cache2" }
+                TargetRule.ContentsUnder(@"%LOCALAPPDATA%\Microsoft\Edge\User Data", @"*\Cache"),
+                TargetRule.ContentsUnder(@"%LOCALAPPDATA%\Microsoft\Edge\User Data", @"*\Code Cache"),
+                TargetRule.ContentsUnder(@"%LOCALAPPDATA%\Microsoft\Edge\User Data", @"*\GPUCache"),
+                TargetRule.ContentsUnder(@"%LOCALAPPDATA%\Google\Chrome\User Data", @"*\Cache"),
+                TargetRule.ContentsUnder(@"%LOCALAPPDATA%\Google\Chrome\User Data", @"*\Code Cache"),
+                TargetRule.ContentsUnder(@"%LOCALAPPDATA%\Google\Chrome\User Data", @"*\GPUCache"),
+                TargetRule.ContentsUnder(@"%LOCALAPPDATA%\Mozilla\Firefox\Profiles", @"*\cache2")
             }),
 
         L2(
@@ -147,9 +147,9 @@ public static class CleanItemCatalog
             "会丢失所有网站的登录状态，之后需要重新登录，部分网站还要重新做一次验证码或短信验证；Cookie 属于用户数据而不是缓存，所以本项默认不勾。",
             new[]
             {
-                TargetRule.File(@"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default\Network\Cookies"),
-                TargetRule.File(@"%LOCALAPPDATA%\Google\Chrome\User Data\Default\Network\Cookies"),
-                TargetRule.Glob(@"%LOCALAPPDATA%\Mozilla\Firefox\Profiles", "cookies.sqlite")
+                TargetRule.GlobUnder(@"%LOCALAPPDATA%\Microsoft\Edge\User Data", @"*\Network", "Cookies"),
+                TargetRule.GlobUnder(@"%LOCALAPPDATA%\Google\Chrome\User Data", @"*\Network", "Cookies"),
+                TargetRule.GlobUnder(@"%LOCALAPPDATA%\Mozilla\Firefox\Profiles", @"*", "cookies.sqlite")
             },
             actionNote: "会丢失网站登录态",
             restoreHint: "不可还原：Cookie 属于用户数据，只能重新登录各网站"),

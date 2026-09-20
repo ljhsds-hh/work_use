@@ -7,18 +7,38 @@ namespace SpaceMaid.Core.Models;
 public sealed record TargetRule
 {
     public required TargetKind Kind { get; init; }
+
+    /// <summary>固定枚举根（不含通配符，可用 %VAR% 模板）。</summary>
     public required string Path { get; init; }
+
+    /// <summary>文件名匹配模式（如 <c>*.dmp</c>；默认 <c>*</c>）。</summary>
     public string Pattern { get; init; } = "*";
+
+    /// <summary>
+    /// 相对 <see cref="Path"/> 的**子目录模式**，可含 <c>*</c> 段，
+    /// 例如 <c>*\LocalCache\Temp</c>（应用包临时目录）、<c>*\cache2</c>（Firefox 缓存）。
+    /// 为空表示直接枚举 <see cref="Path"/>。
+    /// 为什么要单独一个字段：Path 里出现通配符会让路径无法规范化（进而无法做禁止清单校验），
+    /// 所以通配只允许出现在这里，扫描层负责把它展开成若干真实目录。
+    /// </summary>
+    public string? SubPathPattern { get; init; }
+
     public bool Recurse { get; init; }
 
     public static TargetRule Contents(string path, string pattern = "*") =>
         new() { Kind = TargetKind.DirectoryContents, Path = path, Pattern = pattern };
+
+    public static TargetRule ContentsUnder(string path, string subPathPattern, string pattern = "*") =>
+        new() { Kind = TargetKind.DirectoryContents, Path = path, SubPathPattern = subPathPattern, Pattern = pattern };
 
     public static TargetRule Tree(string path) =>
         new() { Kind = TargetKind.DirectoryTree, Path = path, Recurse = true };
 
     public static TargetRule Glob(string path, string pattern) =>
         new() { Kind = TargetKind.FileGlob, Path = path, Pattern = pattern };
+
+    public static TargetRule GlobUnder(string path, string subPathPattern, string pattern) =>
+        new() { Kind = TargetKind.FileGlob, Path = path, SubPathPattern = subPathPattern, Pattern = pattern };
 
     public static TargetRule File(string path) =>
         new() { Kind = TargetKind.FixedFile, Path = path };

@@ -149,21 +149,29 @@ public sealed class ScanEngine : IScanEngine
                 case TargetKind.FileGlob:
                 case TargetKind.DirectoryContents:
                 case TargetKind.DirectoryTree:
-                    if (!_fileSystem.DirectoryExists(root))
+                    // 子目录模式（如 *\LocalCache\Temp）先展开成真实目录；无通配时就是 root 本身
+                    var directories = TargetPathMatcher.HasWildcard(rule)
+                        ? TargetPathMatcher.ExpandDirectories(rule, _fileSystem, _environment)
+                        : (_fileSystem.DirectoryExists(root) ? new[] { root } : Array.Empty<string>());
+
+                    if (directories.Count == 0)
                     {
                         missing.Add(root);
                         break;
                     }
 
                     var recurse = rule.Kind == TargetKind.DirectoryTree || rule.Recurse;
-                    foreach (var file in _fileSystem.EnumerateFiles(root, rule.Pattern, recurse))
+                    foreach (var directory in directories)
                     {
-                        if (++counter % CancellationCheckInterval == 0)
+                        foreach (var file in _fileSystem.EnumerateFiles(directory, rule.Pattern, recurse))
                         {
-                            cancellationToken.ThrowIfCancellationRequested();
-                        }
+                            if (++counter % CancellationCheckInterval == 0)
+                            {
+                                cancellationToken.ThrowIfCancellationRequested();
+                            }
 
-                        candidates.Add(ToScanFile(file, item, _fileSystem.GetLastWriteTime(file), _fileSystem.GetFileSize(file)));
+                            candidates.Add(ToScanFile(file, item, _fileSystem.GetLastWriteTime(file), _fileSystem.GetFileSize(file)));
+                        }
                     }
 
                     break;

@@ -56,21 +56,12 @@ public sealed class SafetyGate
                 $"路径或其上级是符号链接/junction，拒绝继续操作：{normalized}");
         }
 
-        // ④ 白名单：必须位于该清理项某条目标规则的允许范围内
+        // ④ 白名单：必须位于该清理项某条目标规则的允许范围内（支持子目录通配模式）
         foreach (var target in item.Targets)
         {
-            if (!PathNormalizer.TryNormalize(_environment.ExpandVariables(target.Path), _environment, out var root, out _))
+            if (TargetPathMatcher.IsAllowed(normalized, target, _environment))
             {
-                continue;
-            }
-
-            var allowed = target.Kind == TargetKind.FixedFile
-                ? normalized.Equals(root, StringComparison.OrdinalIgnoreCase)
-                : PathNormalizer.IsUnder(normalized, root);
-
-            if (allowed)
-            {
-                return SafetyDecision.Allow($"位于清理项目标范围内：{root}");
+                return SafetyDecision.Allow($"位于清理项目标范围内：{target.Path}");
             }
         }
 

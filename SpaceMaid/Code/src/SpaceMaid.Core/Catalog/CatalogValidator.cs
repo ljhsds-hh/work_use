@@ -179,6 +179,29 @@ public static class CatalogValidator
             }
         }
 
+        // 规则 8-3：子目录通配模式只能用 * 展开目录段，且其固定前缀不得落在禁止目录树内
+        if (item.ActionKind == CleanActionKind.Quarantine)
+        {
+            foreach (var rule in targets.Where(r => !string.IsNullOrWhiteSpace(r.SubPathPattern)))
+            {
+                if (rule.SubPathPattern!.Contains('%'))
+                {
+                    violations.Add($"{id}: SubPathPattern 里不允许出现环境变量（{rule.SubPathPattern}），变量只能写在 Path 里");
+                }
+
+                if (rule.SubPathPattern.StartsWith(Path.DirectorySeparatorChar))
+                {
+                    violations.Add($"{id}: SubPathPattern 必须是相对路径（{rule.SubPathPattern}）");
+                }
+
+                var fixedPrefix = TargetPathMatcher.GetFixedPrefix(rule, environment);
+                if (Denylist.IsDeniedTree(fixedPrefix))
+                {
+                    violations.Add($"{id}: 子目录模式 {rule.SubPathPattern} 的固定前缀 {fixedPrefix} 落在禁止清单的目录树内");
+                }
+            }
+        }
+
         // 规则 9：回收站单列一档，必须有且只有一个 RecycleBin 目标
         if (item.Category == CleanCategory.RecycleBin)
         {
