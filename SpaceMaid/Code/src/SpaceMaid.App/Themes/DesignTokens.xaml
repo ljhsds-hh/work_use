@@ -4,9 +4,10 @@
                     xmlns:hc="https://handyorg.github.io/handycontrol">
 
     <!--
-      SpaceMaid 设计令牌（唯一来源）。
+      SpaceMaid 设计令牌（唯一来源，需求 5.3-1/5）。
       规则：界面一律引用这里的 key，禁止逐处硬编码颜色/字号/间距。
-      颜色一律复用 HandyControl 语义色（DangerBrush / SecondaryTextBrush），不自定义色值，保证皮肤一致性。
+      颜色一律复用 HandyControl 语义色（DangerBrush / SecondaryTextBrush / PrimaryBrush），
+      不自定义色值 —— 换肤时才能跟着 HandyControl 皮肤一起变。
     -->
 
     <!-- 字号 -->
@@ -15,10 +16,13 @@
     <sys:Double x:Key="SmFontSizeBody">13</sys:Double>
     <sys:Double x:Key="SmFontSizeCaption">12</sys:Double>
 
-    <!-- 间距 -->
-    <Thickness x:Key="SmPagePadding">24</Thickness>
-    <Thickness x:Key="SmCardPadding">20</Thickness>
-    <Thickness x:Key="SmItemPadding">12,8</Thickness>
+    <!-- 间距与圆角 -->
+    <Thickness x:Key="SmPagePadding">20</Thickness>
+    <Thickness x:Key="SmCardPadding">16</Thickness>
+    <Thickness x:Key="SmCardMargin">0,0,0,12</Thickness>
+    <Thickness x:Key="SmItemPadding">12,10</Thickness>
+    <Thickness x:Key="SmItemMargin">0,0,0,6</Thickness>
+    <sys:Double x:Key="SmItemSpacing">8</sys:Double>
 
     <!-- 文案样式 -->
     <Style x:Key="SmTextBody" TargetType="TextBlock">
@@ -46,6 +50,18 @@
     <Style x:Key="SmTextSection" TargetType="TextBlock" BasedOn="{StaticResource SmTextBody}">
         <Setter Property="FontSize" Value="{StaticResource SmFontSizeSection}" />
         <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style x:Key="SmTextNumber" TargetType="TextBlock" BasedOn="{StaticResource SmTextBody}">
+        <Setter Property="FontSize" Value="{StaticResource SmFontSizeSection}" />
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+        <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+
+    <!-- 卡片：控件一律优先 HandyControl（hc:Card / hc:Button / hc:CheckBox / hc:Switch），此处只统一样式取值 -->
+    <Style x:Key="SmListCard" TargetType="hc:Card">
+        <Setter Property="Padding" Value="{StaticResource SmCardPadding}" />
+        <Setter Property="Margin" Value="{StaticResource SmCardMargin}" />
     </Style>
 
 </ResourceDictionary>
