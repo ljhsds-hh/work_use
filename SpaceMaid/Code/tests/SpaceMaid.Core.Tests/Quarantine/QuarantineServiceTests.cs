@@ -15,7 +15,7 @@ public class QuarantineServiceTests
         var clock = new QuarantineFakeClock(now ?? Now);
         var fileSystem = new WindowsFileSystem();
         var store = new QuarantineStore(fileSystem, volumes, clock);
-        return (new QuarantineService(store, fileSystem, volumes, clock), store, volumes);
+        return (new QuarantineService(store, fileSystem, volumes, new SpaceMaid.Core.Platform.WindowsEnvironmentProbe(), clock), store, volumes);
     }
 
     private static PlannedFile Planned(string path, long size) =>

@@ -80,12 +80,25 @@ public static class PathNormalizer
     /// <summary>
     /// path 是否严格位于 root 之下（不含 root 自身）。大小写不敏感，按分隔符边界比较，杜绝 "C:\TempEvil" 匹配 "C:\Temp"。
     /// </summary>
+    /// <remarks>
+    /// **卷根必须特殊处理**（这曾经是个真实缺陷）：root 写成 <c>"C:\"</c> 时，用原样的 root 参与边界比较会去读
+    /// <c>p[3]</c>——那是下一级目录名的首字符而不是分隔符，于是"C 盘下的任何路径"都会被判成**不在 root 之下**。
+    /// 回收站清理项的目标根正是 <c>%SystemDrive%\</c>，所以整档会被安全闸门 100% 拒绝（需求 2.5 形同未实现）。
+    /// 正确做法是先用**去掉尾部分隔符**的 root 做前缀比较，再检查边界字符。
+    /// </remarks>
     public static bool IsUnder(string path, string root)
     {
         var p = TrimTrailingSeparator(path);
-        var r = TrimTrailingSeparator(root);
+        var rootFull = TrimTrailingSeparator(root);
 
-        if (p.Length <= r.Length)
+        // 自身不算"之下"（同样适用于卷根："C:\" 不在 "C:\" 之下）
+        if (p.Equals(rootFull, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var r = rootFull.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (r.Length == 0 || p.Length <= r.Length)
         {
             return false;
         }

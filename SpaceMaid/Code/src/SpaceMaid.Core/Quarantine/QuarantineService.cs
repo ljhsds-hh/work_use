@@ -1,6 +1,7 @@
 using SpaceMaid.Core.Abstractions;
 using SpaceMaid.Core.Logging;
 using SpaceMaid.Core.Models;
+using SpaceMaid.Core.Safety;
 
 namespace SpaceMaid.Core.Quarantine;
 
@@ -18,6 +19,7 @@ public sealed class QuarantineService
     private readonly QuarantineStore _store;
     private readonly IFileSystem _fileSystem;
     private readonly IVolumeProbe _volumes;
+    private readonly IEnvironmentProbe _environment;
     private readonly IClock _clock;
     private readonly ILogSink _log;
 
@@ -25,12 +27,14 @@ public sealed class QuarantineService
         QuarantineStore store,
         IFileSystem fileSystem,
         IVolumeProbe volumes,
+        IEnvironmentProbe environment,
         IClock clock,
         ILogSink? log = null)
     {
         _store = store;
         _fileSystem = fileSystem;
         _volumes = volumes;
+        _environment = environment;
         _clock = clock;
         _log = log ?? SilentLogSink.Instance;
     }
@@ -93,6 +97,29 @@ public sealed class QuarantineService
                 continue;
             }
 
+            // 账本是不可信输入：还原目标必须①落在本批次目录内、②是规范化的绝对路径、③不在禁止清单里。
+            // 少了这一层，一条伪造的账目就能把文件搬进（或覆盖）系统目录。
+            if (!QuarantineStore.IsInsideBatch(quarantineRoot, batch.BatchDirectory, entry.StoredAs))
+            {
+                failures.Add(new RestoreFailure(entry.OriginalPath, "账本条目存放路径越界，已拒绝还原"));
+                entries.Add(entry with { Status = MapEntryStatus.Unknown, Note = "账本条目存放路径越界" });
+                continue;
+            }
+
+            if (!PathNormalizer.TryNormalize(entry.OriginalPath, _environment, out var normalizedOriginal, out var pathError))
+            {
+                failures.Add(new RestoreFailure(entry.OriginalPath, $"原始路径不可用：{pathError}"));
+                entries.Add(entry);
+                continue;
+            }
+
+            if (Denylist.IsDenied(normalizedOriginal))
+            {
+                failures.Add(new RestoreFailure(entry.OriginalPath, Denylist.ExplainDenial(normalizedOriginal)));
+                entries.Add(entry with { Status = MapEntryStatus.Unknown, Note = "目标命中禁止清单，已拒绝还原" });
+                continue;
+            }
+
             var payloadPath = Path.Combine(batch.BatchDirectory, entry.StoredAs);
 
             if (!_fileSystem.FileExists(payloadPath))
@@ -102,7 +129,7 @@ public sealed class QuarantineService
                 continue;
             }
 
-            var root = Path.GetPathRoot(entry.OriginalPath);
+            var root = Path.GetPathRoot(normalizedOriginal);
             if (!string.IsNullOrEmpty(root) && !_fileSystem.DirectoryExists(root))
             {
                 failures.Add(new RestoreFailure(entry.OriginalPath, "原卷不可用（盘符不存在）"));
@@ -110,14 +137,14 @@ public sealed class QuarantineService
                 continue;
             }
 
-            if (!restoreOptions.Overwrite && _fileSystem.FileExists(entry.OriginalPath))
+            if (!restoreOptions.Overwrite && _fileSystem.FileExists(normalizedOriginal))
             {
                 conflicts.Add(new RestoreConflict(entry.OriginalPath, "原位置已存在同名文件（未覆盖）"));
                 entries.Add(entry);
                 continue;
             }
 
-            var (ok, reason) = MoveBack(payloadPath, entry.OriginalPath);
+            var (ok, reason) = MoveBack(payloadPath, normalizedOriginal);
             if (ok)
             {
                 restoredCount++;
@@ -160,7 +187,7 @@ public sealed class QuarantineService
             }
 
             var stored = map.Entries.Where(e => e.Status == MapEntryStatus.Stored).ToList();
-            var (files, bytes, deleteNotes) = DeletePayload(batchDirectory, stored);
+            var (files, bytes, deleteNotes) = DeletePayload(quarantineRoot, batchDirectory, stored);
             notes.AddRange(deleteNotes);
 
             if (_store.RemoveBatchDirectory(quarantineRoot, batchDirectory, out var removeError))
@@ -194,7 +221,7 @@ public sealed class QuarantineService
         foreach (var (batchDirectory, map) in _store.ReadAllMaps(quarantineRoot))
         {
             var entries = map.Entries.Where(e => e.Status == MapEntryStatus.Stored).ToList();
-            var (fileCount, entryBytes, deleteNotes) = DeletePayload(batchDirectory, entries);
+            var (fileCount, entryBytes, deleteNotes) = DeletePayload(quarantineRoot, batchDirectory, entries);
             notes.AddRange(deleteNotes);
 
             if (_store.RemoveBatchDirectory(quarantineRoot, batchDirectory, out var removeError))
@@ -214,7 +241,7 @@ public sealed class QuarantineService
         return new ReleaseResult(batches, files, bytes, notes);
     }
 
-    private (int Files, long Bytes, List<string> Notes) DeletePayload(string batchDirectory, IReadOnlyList<QuarantineMapEntry> entries)
+    private (int Files, long Bytes, List<string> Notes) DeletePayload(string quarantineRoot, string batchDirectory, IReadOnlyList<QuarantineMapEntry> entries)
     {
         var notes = new List<string>();
         var deleted = 0;
@@ -222,13 +249,20 @@ public sealed class QuarantineService
 
         foreach (var entry in entries)
         {
+            // 越界条目一律不动（账本是不可信输入，见 QuarantineStore.DeleteQuarantinedFile 的说明）
+            if (!QuarantineStore.IsInsideBatch(quarantineRoot, batchDirectory, entry.StoredAs))
+            {
+                notes.Add($"已忽略越界的账本条目（存放路径越界）：{entry.StoredAs}");
+                continue;
+            }
+
             var payloadPath = Path.Combine(batchDirectory, entry.StoredAs);
             if (!_fileSystem.FileExists(payloadPath))
             {
                 continue;
             }
 
-            if (_store.DeleteQuarantinedFile(payloadPath, out var error))
+            if (_store.DeleteQuarantinedFile(quarantineRoot, batchDirectory, entry.StoredAs, out var error))
             {
                 deleted++;
                 bytes += entry.SizeBytes;

@@ -77,6 +77,20 @@ public class PathNormalizerTests
         Assert.False(PathNormalizer.IsSameOrUnder(@"C:\Temporary", @"C:\Temp"));
     }
 
+    [Theory]
+    [InlineData(@"C:\Windows\Temp\a.tmp", @"C:\", true)]
+    [InlineData(@"C:\Temp", @"C:\", true)]
+    [InlineData(@"C:\", @"C:\", false)]
+    [InlineData(@"D:\a", @"C:\", false)]
+    [InlineData(@"C:\Temp\a.tmp", @"C:\Temp", true)]
+    [InlineData(@"C:\TempEvil\a.tmp", @"C:\Temp", false)]
+    public void IsUnder_should_handle_volume_root_as_base(string path, string root, bool expected)
+    {
+        // 回归：root 写成 "C:\" 时不能把 C 盘下所有路径都判成"不在其下"
+        //（回收站清理项的目标根正是 %SystemDrive%\，否则整档会被安全闸门 100% 拒绝）
+        Assert.Equal(expected, PathNormalizer.IsUnder(path, root));
+    }
+
     [Fact]
     public void ContainsSegment_should_match_whole_segments_only()
     {

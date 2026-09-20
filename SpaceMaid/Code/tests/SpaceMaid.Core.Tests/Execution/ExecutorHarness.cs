@@ -46,7 +46,7 @@ internal sealed class ExecutorHarness : IDisposable
         QuarantinePath = quarantinePath ?? Root.Combine("quarantine");
         Gate = new SafetyGate(FileSystem, Environment);
         Store = new QuarantineStore(FileSystem, Volumes, Clock);
-        Service = new QuarantineService(Store, FileSystem, Volumes, Clock);
+        Service = new QuarantineService(Store, FileSystem, Volumes, Environment, Clock);
         Executor = new CleanExecutor(Gate, Service, new QuarantinePathValidator(), FileSystem, Volumes, Environment, Clock, handlers);
     }
 

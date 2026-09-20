@@ -233,6 +233,16 @@ public sealed class QuarantineStore
             foreach (var entry in map.Entries)
             {
                 var payloadPath = Path.Combine(directory, entry.StoredAs);
+
+                // 账本是不可信输入：只处理"确实落在本批次目录内"的存放路径（TryRead 已做一层，这里是纵深防御）
+                if (!IsInsideBatch(quarantineRoot, directory, entry.StoredAs))
+                {
+                    _log.Warn($"账本条目存放路径越界，已忽略：{entry.StoredAs}");
+                    markedUnknown++;
+                    notes.Add($"异常：账本条目存放路径越界（{entry.StoredAs}），已忽略以防误删");
+                    continue;
+                }
+
                 var payloadExists = _fileSystem.FileExists(payloadPath);
                 var sourceExists = _fileSystem.FileExists(entry.OriginalPath);
 
@@ -248,7 +258,7 @@ public sealed class QuarantineStore
                 else if (payloadExists && sourceExists)
                 {
                     // 复制成功但删源未完成：源文件是用户的原始文件，优先保留它，删掉隔离副本
-                    _fileSystem.TryDeleteFile(payloadPath, out var deleteError);
+                    DeleteQuarantinedFile(quarantineRoot, directory, entry.StoredAs, out var deleteError);
                     pendingCleared++;
                     notes.Add($"幂等修复：{entry.OriginalPath} 仍在原位，已丢弃隔离副本（{(string.IsNullOrEmpty(deleteError) ? "成功" : deleteError)}）");
                 }
@@ -295,9 +305,54 @@ public sealed class QuarantineStore
     public bool TryWriteMap(string batchDirectory, QuarantineMap map, out string error) =>
         QuarantineMapStore.TryWrite(batchDirectory, map, out error);
 
-    /// <summary>删除隔离区内的一个实体文件（唯一允许的删除调用点）。</summary>
-    internal bool DeleteQuarantinedFile(string payloadPath, out string error) =>
-        _fileSystem.TryDeleteFile(payloadPath, out error);
+    /// <summary>
+    /// 删除隔离区内的一个实体文件——**唯一允许的删除调用点**（不变量 I-1）。
+    /// 入参用"隔离区根 + 批次目录 + 相对存放路径"而不是裸路径：这样可以在真正删除之前
+    /// 用 <see cref="IsInsideBatch"/> 证明目标是"本批次目录内的相对路径"，
+    /// 从根上堵住"伪造账本条目的 StoredAs 指向系统文件"这条提权删除通道。
+    /// </summary>
+    internal bool DeleteQuarantinedFile(string quarantineRoot, string batchDirectory, string storedAs, out string error)
+    {
+        if (!IsInsideBatch(quarantineRoot, batchDirectory, storedAs))
+        {
+            error = $"拒绝删除隔离区之外的文件：{storedAs}";
+            _log.Error(error);
+            return false;
+        }
+
+        var payloadPath = Path.Combine(batchDirectory, storedAs);
+        return _fileSystem.TryDeleteFile(payloadPath, out error);
+    }
+
+    /// <summary>
+    /// 存放路径是否"安全地落在本批次目录内"：① StoredAs 本身相对且无 ..；② 拼出的绝对路径确实位于批次目录之下；
+    /// ③ 批次目录位于给定隔离区根之下。
+    /// </summary>
+    internal static bool IsInsideBatch(string quarantineRoot, string batchDirectory, string storedAs)
+    {
+        if (!QuarantineMapStore.IsSafeStoredAs(storedAs))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(quarantineRoot) || string.IsNullOrWhiteSpace(batchDirectory))
+        {
+            return false;
+        }
+
+        try
+        {
+            var root = Path.GetFullPath(quarantineRoot);
+            var batch = Path.GetFullPath(batchDirectory);
+            var payload = Path.GetFullPath(Path.Combine(batch, storedAs));
+
+            return PathNormalizer.IsUnder(batch, root) && PathNormalizer.IsUnder(payload, batch);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
 
     /// <summary>
     /// 删除一个批次目录（释放/清空时使用）。**唯一允许调用目录删除的位置**（不变量 I-1）。
