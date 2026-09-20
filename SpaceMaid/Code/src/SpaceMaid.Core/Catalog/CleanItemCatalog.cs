@@ -344,7 +344,7 @@ public static class CleanItemCatalog
             DisplayName = displayName,
             Risk = ItemRisk.Safe,
             ActionKind = CleanActionKind.Quarantine,
-            Targets = targets,
+            Targets = WithDefaultDepth(id, targets),
             SideEffect = sideEffect,
             DefaultChecked = true,
             AutoRegenerated = true,
@@ -369,7 +369,7 @@ public static class CleanItemCatalog
             DisplayName = displayName,
             Risk = risk,
             ActionKind = CleanActionKind.Quarantine,
-            Targets = targets,
+            Targets = WithDefaultDepth(id, targets),
             SideEffect = sideEffect,
             ActionNote = actionNote,
             RestoreHint = restoreHint,
@@ -394,13 +394,45 @@ public static class CleanItemCatalog
             DisplayName = displayName,
             Risk = risk,
             ActionKind = actionKind,
-            Targets = targets,
+            Targets = WithDefaultDepth(id, targets),
             SideEffect = sideEffect,
             ActionNote = actionNote,
             RestoreHint = restoreHint,
             DefaultChecked = false,
             AutoRegenerated = false
         };
+
+    /// <summary>
+    /// 深度归一化（**这曾经是个真实缺陷**）：
+    /// 缓存型目录的内容大多躺在子目录里（<c>.nuget\packages\&lt;包&gt;\...</c>、
+    /// Chromium 的 <c>Cache\Cache_Data\...</c>、<c>.gradle\caches\...</c>），
+    /// 如果只枚举直接子文件，这些条目会"一个文件都扫不到"，等于形同虚设。
+    /// 因此除下列**面向用户数据、必须保持非递归**的条目外，一律把目录内容规则置为递归。
+    /// </summary>
+    private static IReadOnlyList<TargetRule> WithDefaultDepth(string id, IReadOnlyList<TargetRule> targets)
+    {
+        if (targets.Count == 0 || IsShallowOnly(id))
+        {
+            return targets;
+        }
+
+        return targets
+            .Select(rule => rule.Kind == TargetKind.DirectoryContents ? rule with { Recurse = true } : rule)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// 只允许"直接内容"的条目：
+    /// 下载目录里的安装包（不该钻进压缩包解出来的子目录）、大文件与重复文件
+    /// （需求 4.1-6 明令不递归删除用户目录）、卸载残留（由注册表判定决定具体文件）。
+    /// 注意：这里刻意用 switch 而不是静态集合——静态字段的初始化顺序在静态成员之间是有先后的，
+    /// 集合如果声明在 Items 之后就会在构造清单时还是 null（曾经真的踩了这个坑）。
+    /// </summary>
+    private static bool IsShallowOnly(string id) => id switch
+    {
+        "l2.downloads-installers" or "l3.large-files" or "l3.duplicate-files" or "l3.orphan-app-dirs" => true,
+        _ => false
+    };
 
     /// <summary>
     /// 大文件 / 重复文件只做展示的候选范围：用户目录的**直接内容**（非递归），
