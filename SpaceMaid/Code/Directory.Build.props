@@ -1,0 +1,20 @@
+<Project>
+
+  <!--
+    全解决方案共享的构建属性。
+
+    为什么只放"Release 去掉调试符号"这一条：其余公共属性（TargetFramework / Nullable /
+    ImplicitUsings / LangVersion）在各 csproj 里重复但已经稳定，动它们属于无收益的重构风险；
+    而调试符号这一条是有实际后果的——发布目录的对外承诺是"一个 exe 免安装"
+    （Docs/发布部署指南.md），但 SpaceMaid.Core.pdb 会跟着被拷进 publish 目录，
+    让"单文件"这个说法在目录列表里当场破功。放在这里而不是各 csproj 里，
+    是为了避免以后新增工程时又漏掉一次。
+
+    注意：只对 Release 生效。Debug 必须保留 pdb，否则出问题没有行号可查。
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+</Project>

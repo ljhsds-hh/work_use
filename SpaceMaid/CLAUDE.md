@@ -25,7 +25,7 @@ Windows 桌面 C 盘（系统盘）空间清理工具（work_use 工具集之一
 - 休眠文件：唯一执行方式是 `powercfg /h off`，**永不直接删除 `hiberfil.sys`**；必须先通过用户显式授权闸门
 - 系统还原点 / 卷影副本：**永久禁止项**——不扫描、不展示、不删除，连体积也不展示
 - 范围边界：**只处理 C 盘**；回收站默认也只处理 C 盘，其他盘需显式开启
-- 应用图标由 `Code/scripts/gen-icon.ps1` 程序化生成（**该脚本尚未创建**，见"当前工程状态"）
+- 应用图标由 `Code/scripts/gen-icon.ps1` 程序化生成（**已创建**：产出 9 种尺寸的 `Code/src/SpaceMaid.App/Assets/app.ico`，381,038 字节，改设计只需改脚本参数重新生成，**勿手工编辑 app.ico**）
 
 ## 安全不变量（唯一授权入口与硬约束）
 
@@ -140,7 +140,9 @@ Windows 桌面 C 盘（系统盘）空间清理工具（work_use 工具集之一
 
 `dotnet test Code/space-maid.slnx`
 
-**当前用例数（按源码统计，快照）= 288（内核）+ 23（界面）= 311**。统计口径是 `Σ [Fact] 个数 + Σ [InlineData] 个数`；**这个数字随开发快速变动，不要把它当固定事实，以 `dotnet test` 的实际输出为准**。复现命令见 `Docs/测试报告.md` 第 1.2 节。
+**数字一律以当场 `dotnet test` 的输出为准，本文档不钉任何固定值。** 本项目用例数增长很快（曾经历 205 → 232 → 311 → 314 → 365 几个阶段），把它写死过一次已经过时一次，所以这里只留方法、不留快照。
+
+> **注意工作区可能不等于 HEAD**：`SpaceMaid.App` / `SpaceMaid.App.Tests` / `SpaceMaid.Core` 常有并发改动。**跑测试之前先 `git status`**，并用 `git diff` 确认你读到的是哪一版代码；测试红了先分清是"自己改坏的"还是"别人正在改的"（并发开发中常见：新增了断言用例，而对应的生产实现还没写完）。
 
 常用过滤命令：
 
@@ -166,6 +168,9 @@ dotnet test Code/space-maid.slnx --filter FullyQualifiedName~Reporting
 # 静态安全检索（I-1/I-5/I-6 的源码级证据）
 dotnet test Code/space-maid.slnx --filter FullyQualifiedName~Architecture
 
+# 只读 CLI（参数解析与"绝不提供删除能力"）
+dotnet test Code/space-maid.slnx --filter FullyQualifiedName~Cli
+
 # 只跑内核工程
 dotnet test Code/tests/SpaceMaid.Core.Tests/SpaceMaid.Core.Tests.csproj
 ```
@@ -179,11 +184,25 @@ dotnet test Code/tests/SpaceMaid.Core.Tests/SpaceMaid.Core.Tests.csproj
 
 ## 当前工程状态（写文档时的真实情况）
 
-- 已完成：`SpaceMaid.Core` 全部内核能力（安全底座、目录闭集、扫描、隔离区、执行器、报告、特殊项、设置、日志、组合根 `CoreServices`），提交历史见 `git log -- SpaceMaid`
-- 界面 `SpaceMaid.App`：**正在收尾**。`App.xaml.cs` 已接入 `CoreServices`（启动编排：创建内核 → `Prepare()` 启动自检 → 组装平台服务 → 建 `MainViewModel` → 显示主窗），`ViewModels/`（`MainViewModel`、`CleanItemViewModel`、`SettingsViewModel`）与 `Views/`（`MainWindow`、`SettingsWindow`）已就位，`Themes/DesignTokens.xaml` 收敛设计令牌
-- **只读 CLI 位于内核**：`SpaceMaid.Core/Cli/`（`CliRunner`、`CliOptions`），支持 `--dry-run`（扫描 + 导出清单）与 `--report`（读回清单 + 复核报告）。设计决策 D-2 说明 CLI 内置于 App.exe，但**当前 `App.xaml.cs` 尚未解析命令行参数**，因此 CLI 目前只能通过 `CliRunner` 直接调用（内核级）；"任何删除动作都只能在 GUI 里由用户点击触发"这条约束不变
-- 尚未创建：`Code/scripts/gen-icon.ps1`、`Code/src/SpaceMaid.App/Assets/app.ico`、`Code/Directory.Build.props`、`Execution/DismComponentCleanupTests.cs`（实施计划点名的 `DismComponentCleanupTests.Should_not_use_reset_base`；DISM 参数不含开关目前由 `HibernateGateTests` 的同名断言与静态检索测试覆盖）
+- 内核 `SpaceMaid.Core`：**全部完成**——安全底座、目录闭集、扫描（流式枚举 + 单项界限）、隔离区（含断电自检与一键还原）、执行器、报告、特殊项、设置、日志、组合根 `CoreServices`、只读 CLI。提交历史见 `git log --oneline -- SpaceMaid`
+- 界面 `SpaceMaid.App`：**收尾完成**。`App.xaml.cs` 已接入 `CoreServices`（启动编排：解析命令行 → 创建内核 → `Prepare()` 启动自检 → 组装平台服务 → 建 `MainViewModel` → 显示主窗），`ViewModels/`（`MainViewModel`、`CleanItemViewModel`、`SettingsViewModel`）与 `Views/`（`MainWindow`、`SettingsWindow`）已就位，`Themes/DesignTokens.xaml` 收敛设计令牌。界面冒烟证据：`Code/scripts/smoke-ui.ps1` PASS
+- **只读 CLI 已接进 `SpaceMaid.exe`**（`0ad7e57`）：`App.xaml.cs` 解析 `e.Args`，`CliOptions.IsCommandLineInvocation` 为真就走 CLI 分支并 `Shutdown(exitCode)`，**绝不回落到 GUI**——否则一次手滑的 `--clean` 会变成"打开工具 + 顺手做启动维护"（顺带删掉到期的隔离批次）。用法错误（含 `--clean` 这类被拒开关）退出码 **2** 并提示"本工具不提供命令行清理能力"；成功 **0**；执行失败 **1**。设计决策 D-2 "CLI 内置于 App.exe" 至此真正落地，CLI 不再只能通过内核级 `CliRunner` 直接调用
+- **已创建**（此前本文档记为"尚未创建"）：
+  - `Code/scripts/gen-icon.ps1`：程序化生成应用图标，产出 9 种尺寸（16/20/24/32/40/48/64/128/256）的 `Code/src/SpaceMaid.App/Assets/app.ico`（381,038 字节，已逐像素验证）
+  - `Code/src/SpaceMaid.App/Assets/app.ico`：与 `SpaceMaid.App.csproj` 的 `<ApplicationIcon>` 配套（**勿手工编辑**，改设计就改脚本参数重新生成）
+  - `Code/Directory.Build.props`：解决方案级构建属性，**仅 Release** 生效 `DebugType=none` / `DebugSymbols=false`。原因是 `SpaceMaid.Core.pdb` 会被拷进 publish 目录，让"一个 exe 免安装"当场破功；加入后 publish 目录只剩 `SpaceMaid.exe`
+  - `Code/scripts/smoke-ui.ps1`：界面冒烟脚本，用 dotnet 宿主加载 `SpaceMaid.dll`（**绕开 `requireAdministrator` 的 apphost，避免无人值守时卡在 UAC**），启动后 3 秒内枚举该进程顶层窗口按标题判定。实测 PASS：匹配到标题"权限不足"，退出码 0，无进程残留。它从不点击任何按钮，所以不可能触发清理动作
+- **唯一待办**：`Code/tests/SpaceMaid.Core.Tests/Execution/DismComponentCleanupTests.cs` **仍未创建**（实施计划点名的 `DismComponentCleanupTests.Should_not_use_reset_base`）。目前"DISM 参数不含重置基线"这条由 `HibernateGateTests` 的同名断言 + `Architecture/StaticSafetyTests.cs` 的源码级断言共同覆盖，所以不变量本身没有裸奔，但实施计划列表上这一项确实还空着
+- **仍未在真机执行过真实清理**（需求 3.9：工具只出清单，用户审阅后自己执行，工具再复核）。所有实测都停在 dry-run 与复核这一侧——**任何地方都不要写成"已验证清理成功"**；需要"清理有效"的证据就必须先有一次真实人工清理
 - `SpaceMaid.App`、`SpaceMaid.App.Tests` 与 `SpaceMaid.Core` 的部分文件正被另一路并发改动；**改这些目录前先看 `git status`**，不要假设工作区等于 HEAD
+
+### 易踩坑（都是实际踩过的）
+
+1. **扫描必须同时有流式枚举与单项界限**。`IFileSystem.EnumerateFilesStreaming` + `ScanEngine.MaxFilesPerItem = 20000` + `DefaultItemTimeBudget = 15 s` 三件事缺一不可：`%LOCALAPPDATA%\pnpm\store` 这类内容寻址缓存是十万级小文件，修复前光是 `l2.dev-caches` 这一项就要跑 20 s 以上，整机 dry-run 能拖到十分钟还出不了结果。命中界限**不是失败**——取已收集的部分照常处理，并在清单里如实写明"结果可能不完整"（对抗式评审 F-12）。提交 `2fd7422`
+2. **"总容量"必须靠 `IVolumeCapacityProbe`**。界面的磁盘总览与清单头部的总容量都读它，而 `IVolumeProbe` 只回答"卷根 / 剩余空间 / 介质 / UNC"四件事，**不能只靠 `IVolumeProbe`**；探针缺省时那个数字会显示成 `0 B`（首次真机 dry-run 就出现过"系统盘：C:\（总容量 0 B，可用 64.54 GB）"）。`CoreServices.Create` 的缺省值是 `WindowsVolumeCapacityProbe`。提交 `2fd7422`
+3. **隔离区路径校验的两个目录强度不一样**（`QuarantinePathValidator`）。真正落地的是 `<基路径>\SpaceMaid\Quarantine`，它才是**强校验**对象：既不能落在禁止目录树里，也不能命中凭据/还原点等禁止段。**基路径只拒绝落在禁止树内的**（网络路径、磁盘根、不可写一律仍然拒绝），**不能再对基路径用 `Denylist.IsDenied` 整体判定**——默认基路径就是 `%LOCALAPPDATA%`，而它是禁止清单里的"用户目录根本身"，一旦那样判，默认配置开箱即"隔离区不可用"，整条清理链路都跑不起来。提交 `2fd7422`
+4. **信息项的体积绝不能算进"可处理"口径**（本机真机 dry-run 实测踩到）。`l3.pagefile` 的 `ActionKind` 是 `InformationalOnly`——它只展示体积、**永不执行**（`CleanExecutor` 直接跳过、界面连勾选框都没有、`Denylist` 还硬拦着 `pagefile.sys`）。早先 `MainViewModel.ProcessableBytes` 与 `CleanPlan.PlannedFileCount/PlannedBytes` 把它一起求和，于是同一台机器报出"39134 个文件，21.32 GB / 可处理 21.32 GB"，其中约 **15 GB 是 `C:\pagefile.sys`**，占"可处理"总量的七成——这等于向用户承诺一件不会发生的事。修正后的口径是：界面 `IsProcessable` 与清单 `CleanPlan.Actionable` **必须用同一判据**（排除 `InformationalOnly`），清单额外单列一行"仅展示、不执行：页面文件 15 GB（不计入上面的可处理体积）"。修正后同机实测为 **39145 个文件 / 6.32 GB**。**改体积求和的地方先问一句"这一项到底会不会执行"**
+5. **"清单行数"与"计划文件数"不是一回事**。清单 csv 里信息项也占一行，所以复核基准必须比 `ManifestFileCount`；拿 `PlannedFileCount` 去比会因为信息项永远差一行，**每次都误报"勾选被改动过"**
 
 ## 构建与发布
 
@@ -193,7 +212,13 @@ dotnet test Code/space-maid.slnx
 dotnet publish Code/src/SpaceMaid.App -c Release
 ```
 
-Release 发布参数已在 `Code/src/SpaceMaid.App/SpaceMaid.App.csproj` 中固化（仅 Release 生效）：`RuntimeIdentifier=win-x64`、`SelfContained=true`、`PublishSingleFile=true`、`IncludeNativeLibrariesForSelfExtract=true`、`EnableCompressionInSingleFile=true`、`DebugType=none`、`SatelliteResourceLanguages=zh-Hans;en`。产物为 `bin/Release/net8.0-windows/win-x64/publish/SpaceMaid.exe`。
+Release 发布参数已在 `Code/src/SpaceMaid.App/SpaceMaid.App.csproj` 中固化（仅 Release 生效）：`RuntimeIdentifier=win-x64`、`SelfContained=true`、`PublishSingleFile=true`、`IncludeNativeLibrariesForSelfExtract=true`、`EnableCompressionInSingleFile=true`、`SatelliteResourceLanguages=zh-Hans;en`。
+
+另有解决方案级 `Code/Directory.Build.props`（仅 Release）设 `DebugType=none` / `DebugSymbols=false`：`SpaceMaid.Core.pdb` 会跟着被拷进 publish 目录，让"一个 exe 免安装"当场破功。**Debug 必须保留 pdb**，所以这条不能提到无条件生效。
+
+实测：`dotnet publish Code/src/SpaceMaid.App -c Release` 产出 `bin/Release/net8.0-windows/win-x64/publish/SpaceMaid.exe`，**67,217,692 字节（64.1 MB），且 publish 目录下只有这一个文件**。
+
+> **发布时必查**：publish 之后 `Get-ChildItem` 一下 publish 目录，**必须只剩 `SpaceMaid.exe` 一个文件**。多出任何 `*.pdb` / `*.dll` / `*.json` 都说明有属性被改回或新增工程漏了 `Directory.Build.props`，对外承诺的"单文件免安装"就不成立了。
 
 `app.manifest` 固定 `requireAdministrator`，并声明 Win10/11 兼容、per-monitor v2 DPI、`longPathAware`。程序集名为 `SpaceMaid`（工程目录名是 `SpaceMaid.App`）。详细发布流程见 `Docs/发布部署指南.md`。
 
