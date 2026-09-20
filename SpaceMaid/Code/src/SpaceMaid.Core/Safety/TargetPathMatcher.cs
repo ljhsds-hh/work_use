@@ -79,9 +79,9 @@ public static class TargetPathMatcher
             return false;
         }
 
-        if (rule.Kind == TargetKind.DirectoryTree)
+        if (rule.Kind == TargetKind.DirectoryTree || rule.Recurse)
         {
-            // 允许目录之下的任意层级，但不允许目录本身
+            // 允许目录之下的任意层级（递归），但不允许目录本身
             return Regex.IsMatch(normalizedCandidate, "^" + directoryPattern + @"\\.+$", RegexOptions.IgnoreCase);
         }
 

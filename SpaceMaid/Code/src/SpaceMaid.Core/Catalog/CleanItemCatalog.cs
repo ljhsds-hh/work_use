@@ -252,7 +252,7 @@ public static class CleanItemCatalog
             "l3.component-store",
             "组件存储清理",
             ItemRisk.Caution,
-            "只走 DISM 官方命令（StartComponentCleanup），移除的是已经被新版取代的旧组件，不会直接删除 WinSxS 里的文件；耗时可能长达十几分钟，中途不要关机。清理后最近安装的更新可能无法卸载回滚，本工具不提供重置基线（ResetBase）选项。",
+            "只走 DISM 官方命令（StartComponentCleanup），移除的是已经被新版取代的旧组件，不会直接删除 WinSxS 里的文件；耗时可能长达十几分钟，中途不要关机。清理后最近安装的更新可能无法卸载回滚；本工具不提供「重置基线」选项（启用它会让你无法卸载任何已安装的更新）。",
             Array.Empty<TargetRule>(),
             actionKind: CleanActionKind.DismComponentCleanup,
             actionNote: "只走 DISM 官方命令，耗时可能十几分钟",

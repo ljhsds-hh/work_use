@@ -64,11 +64,12 @@ public class StaticSafetyTests
     [Fact]
     public void Core_should_not_use_component_store_reset_base()
     {
-        // 需求 2.4 / 设计文档 7.2：只有 /StartComponentCleanup，绝不重置基线（那会让所有更新无法卸载）
+        // 需求 2.4 / 设计文档 7.2：只有 /StartComponentCleanup，绝不重置基线（那会让所有更新无法卸载）。
+        // 这里刻意断言**裸字串**而不带斜杠：否则文案里写一句"不提供 ResetBase"就能让用例"看着通过"，
+        // 却拦不住真的把开关写进命令参数。
         foreach (var (file, text) in ReadCoreSources())
         {
-            Assert.DoesNotContain("/ResetBase", text, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("/resetbase", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("ResetBase", text, StringComparison.OrdinalIgnoreCase);
         }
     }
 

@@ -135,4 +135,27 @@ public class WildcardScanTests
 
         Assert.Empty(directories);
     }
+
+    [Fact]
+    public async Task Recursive_wildcard_rule_should_allow_nested_files_end_to_end()
+    {
+        using var root = new TempRoot();
+        root.WriteFile(@"LocalAppData\Packages\App1\LocalCache\Temp\sub\deep.tmp", "deep");
+        var outside = Path.Combine(root.Path, "LocalAppData", "Packages", "App1", "Other", "deep.tmp");
+
+        var environment = new TempMappedEnvironmentProbe(root.Path);
+        // 清单里的缓存条目会被 WithDefaultDepth 置为递归：扫描能收到嵌套文件，
+        // 安全闸门也必须放行同一批文件，否则会出现"扫到了却全部被拒绝"的空转。
+        var item = Item(TargetRule.ContentsUnder(@"%LOCALAPPDATA%\Packages", @"*\LocalCache\Temp") with { Recurse = true });
+        var engine = new ScanEngine(new WindowsFileSystem(), environment, new ScanFakeVolumeProbe(), new FakeClock(DateTimeOffset.Now));
+
+        var report = await engine.ScanAsync(new ScanRequest(new[] { item }, false), null, CancellationToken.None);
+        var scanned = report.Entries.Single().Files.Single().Path;
+
+        Assert.EndsWith(@"sub\deep.tmp", scanned, StringComparison.OrdinalIgnoreCase);
+
+        var gate = new SafetyGate(new WindowsFileSystem(), environment);
+        Assert.True(gate.Authorize(scanned, item).IsAllowed, "递归的通配规则必须放行嵌套文件");
+        Assert.Equal(SafetyVerdict.OutsideAllowlist, gate.Authorize(outside, item).Verdict);
+    }
 }
