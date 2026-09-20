@@ -70,6 +70,27 @@ public class QuarantinePathValidatorTests
     }
 
     [Fact]
+    public void Should_accept_user_data_root_as_base_because_storage_goes_into_a_subfolder()
+    {
+        // 实测修正：默认基目录就是 %LOCALAPPDATA%（它属于"用户目录根本身"），
+        // 但隔离区只是往里建 SpaceMaid\Quarantine 子目录，不会动用户目录本身——
+        // 此前用 IsDenied 判基目录会让**默认配置直接不可用**，整条清理链路跑不起来。
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var result = Validate(localAppData);
+
+        Assert.True(result.IsUsable, $"默认基目录必须可用，实际：{result.Level} / {result.Message}");
+        Assert.NotEqual(string.Empty, result.Message);
+    }
+
+    [Fact]
+    public void Should_reject_denied_segment_in_storage_path()
+    {
+        var result = Validate(@"C:\Temp\.ssh\quarantine");
+
+        Assert.Equal(QuarantinePathLevel.Reject, result.Level);
+    }
+
+    [Fact]
     public void Should_warn_when_quarantine_is_on_same_volume_as_source()
     {
         var result = Validate(@"C:\SpaceMaidQuarantine");

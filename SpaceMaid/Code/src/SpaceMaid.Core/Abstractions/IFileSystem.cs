@@ -41,6 +41,27 @@ public interface IFileSystem
     IReadOnlyList<string> EnumerateDirectories(string directory);
 
     /// <summary>
+    /// **惰性、可取消**地枚举文件。
+    ///
+    /// 为什么需要它（这是实测出来的性能缺陷）：<see cref="EnumerateFiles"/> 返回的是
+    /// <see cref="IReadOnlyList{T}"/>，实现必须**先把整棵树物化成列表**才能返回——
+    /// 于是调用方的取消检查要等整棵树枚举完才有机会跑，真实机器上一个大目录树就能让扫描卡住好几分钟。
+    /// 本方法边遍历边产出，调用方每收一个文件都能检查取消。
+    ///
+    /// 默认实现退回一次性枚举（假实现与测试不必改写）；Windows 实现是真正惰性的，
+    /// 并且带**已访问目录集合**以防 junction 环导致无限递归。
+    /// </summary>
+    IEnumerable<string> EnumerateFilesStreaming(
+        string directory,
+        string pattern,
+        bool recurse,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return EnumerateFiles(directory, pattern, recurse);
+    }
+
+    /// <summary>
     /// 以只读方式打开文件供计算哈希/比对使用；调用方负责释放。
     /// 这是唯一**允许抛出**的成员：调用点（隔离区跨卷校验）必须自行捕获并记"未清理成功"。
     /// </summary>

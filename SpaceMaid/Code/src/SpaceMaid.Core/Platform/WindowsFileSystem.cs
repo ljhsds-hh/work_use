@@ -193,6 +193,83 @@ public sealed class WindowsFileSystem : IFileSystem
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// 手写遍历（显式栈）而不是 <c>Directory.EnumerateFiles(AllDirectories)</c>，原因有两个：
+    /// ① **可取消**——每个文件产出前都检查一次取消令牌，扫描不会"卡在枚举里"（实测这是真实机器上扫描卡住的主因）；
+    /// ② **防环**——已访问目录以规范化的绝对路径记账，junction 环不会让遍历无限递归（对抗式评审 F-12）。
+    /// </remarks>
+    public IEnumerable<string> EnumerateFilesStreaming(
+        string directory,
+        string pattern,
+        bool recurse,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            yield break;
+        }
+
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pending = new Stack<string>();
+        pending.Push(directory);
+        var effectivePattern = string.IsNullOrWhiteSpace(pattern) ? "*" : pattern;
+
+        while (pending.Count > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var current = pending.Pop();
+
+            string canonical;
+            try
+            {
+                canonical = Path.GetFullPath(current);
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            if (!visited.Add(canonical))
+            {
+                continue;   // 环或重复目录：跳过
+            }
+
+            IEnumerable<string> files;
+            try
+            {
+                files = Directory.EnumerateFiles(current, effectivePattern);
+            }
+            catch (Exception)
+            {
+                continue;   // 目录不可读：跳过该层，其余照常
+            }
+
+            foreach (var file in files)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return file;
+            }
+
+            if (!recurse)
+            {
+                continue;
+            }
+
+            try
+            {
+                foreach (var sub in Directory.EnumerateDirectories(current))
+                {
+                    pending.Push(sub);
+                }
+            }
+            catch (Exception)
+            {
+                // 子目录不可读：跳过该层
+            }
+        }
+    }
+
+    /// <inheritdoc />
     /// <remarks>共享模式给 <c>Read</c>，允许其它进程继续写（只需读快照即可计算哈希）。</remarks>
     public Stream OpenRead(string path)
     {

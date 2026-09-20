@@ -75,7 +75,13 @@ public sealed class QuarantinePathValidator
             return new QuarantinePathValidation(QuarantinePathLevel.Reject, pathError, pathError);
         }
 
-        // ② 系统目录 / 磁盘根目录：不允许把隔离区塞进系统目录，也不允许直接落在卷根
+        // ② 系统目录 / 磁盘根
+        //
+        // 注意这里**只拒绝禁止目录树**，不拒绝"用户目录根本身"（对抗式评审后的实测修正）：
+        // 默认基目录是 %LOCALAPPDATA%，而它恰好是禁止清单里的"用户目录根本身"——
+        // 那条规则的用途是"不把用户目录整个当清理目标"，而隔离区只是**往里建一个子目录**
+        // （<基目录>\SpaceMaid\Quarantine），并不会动用户目录本身。此前用 IsDenied 判定基目录，
+        // 导致默认配置在真机上直接"隔离区不可用"，整条清理链路都跑不起来。
         var root = Path.GetPathRoot(normalized) ?? string.Empty;
         if (PathNormalizer.TrimTrailingSeparator(normalized).Equals(PathNormalizer.TrimTrailingSeparator(root), StringComparison.OrdinalIgnoreCase))
         {
@@ -85,7 +91,7 @@ public sealed class QuarantinePathValidator
                 $"拒绝卷根：{normalized}");
         }
 
-        if (Denylist.IsDenied(normalized))
+        if (Denylist.IsDeniedTree(normalized))
         {
             return new QuarantinePathValidation(
                 QuarantinePathLevel.Reject,
@@ -95,6 +101,17 @@ public sealed class QuarantinePathValidator
 
         // ③ 可写性：尝试创建 <candidate>\SpaceMaid\Quarantine
         var storageRoot = Path.Combine(normalized, "SpaceMaid", "Quarantine");
+
+        // 真正要保证安全的是**实际存放目录**：它不能落在禁止目录树里，也不能命中凭据/还原点等禁止段
+        if (Denylist.IsDeniedTree(storageRoot)
+            || Denylist.DeniedSegments.Any(segment => PathNormalizer.ContainsSegment(storageRoot, segment)))
+        {
+            return new QuarantinePathValidation(
+                QuarantinePathLevel.Reject,
+                "隔离区实际存放位置不安全，请换一个普通文件夹",
+                $"拒绝存放目录：{storageRoot}");
+        }
+
         try
         {
             fileSystem.CreateDirectory(storageRoot);

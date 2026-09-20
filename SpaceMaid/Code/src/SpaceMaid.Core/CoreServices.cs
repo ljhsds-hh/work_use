@@ -40,6 +40,7 @@ public sealed class CoreServices
         IClock clock,
         IVolumeProbe volumes,
         IEnvironmentProbe environment,
+        IVolumeCapacityProbe capacity,
         ICommandRunner commandRunner,
         IRecycleBinScanner recycleBin)
     {
@@ -52,7 +53,7 @@ public sealed class CoreServices
         Environment = environment;
 
         SafetyGate = new SafetyGate(fileSystem, environment, log);
-        Scanner = new ScanEngine(fileSystem, environment, volumes, clock, capacity: null, recycleBin: recycleBin, log: log, selectors: new IItemCandidateSelector[] { new LargeFileSelector(), new DuplicateFileSelector(), new OrphanDirectorySelector(new RegistryInstalledProgramIndex(log), clock, log, environment) });
+        Scanner = new ScanEngine(fileSystem, environment, volumes, clock, capacity: capacity, recycleBin: recycleBin, log: log, selectors: new IItemCandidateSelector[] { new LargeFileSelector(), new DuplicateFileSelector(), new OrphanDirectorySelector(new RegistryInstalledProgramIndex(log), clock, log, environment) });
         QuarantineStore = new QuarantineStore(fileSystem, volumes, clock, log);
         Quarantine = new QuarantineService(QuarantineStore, fileSystem, volumes, environment, clock, log);
         PathValidator = new QuarantinePathValidator();
@@ -237,6 +238,7 @@ public sealed class CoreServices
         IClock? clock = null,
         IVolumeProbe? volumes = null,
         IEnvironmentProbe? environment = null,
+        IVolumeCapacityProbe? capacity = null,
         ICommandRunner? commandRunner = null,
         ILogSink? log = null,
         IReadOnlyList<string>? otherDriveRoots = null)
@@ -268,6 +270,7 @@ public sealed class CoreServices
             clockInstance,
             volumesInstance,
             environmentInstance,
+            capacity ?? new WindowsVolumeCapacityProbe(),
             commandRunner ?? new ProcessCommandRunner(),
             recycleBin);
     }

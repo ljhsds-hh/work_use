@@ -28,16 +28,28 @@ public sealed class ScanEngine : IScanEngine
     private readonly ILogSink _log;
     private readonly IReadOnlyList<IItemCandidateSelector> _selectors;
     private readonly int _maxFilesPerItem;
+    private readonly TimeSpan _itemTimeBudget;
 
     /// <summary>
-    /// 单项候选枚举上限。畸形目录树（几十万小文件、指向上层的 junction 环）不能让整次扫描变成"假死"；
-    /// 达到上限就带上"结果可能不完整"的说明继续（对抗式评审 F-12）。
+    /// 单项候选枚举上限（默认 5 万）。
+    ///
+    /// 实测依据：默认值曾是 20 万，而在真实机器上光是 `~\.nuget\packages`、`~\.gradle\caches`
+    /// 这类开发缓存就有十几万个文件，每个文件要读两次属性（修改时间 + 体积）——
+    /// 单这一项就能让扫描卡住好几分钟。5 万是"能覆盖绝大多数机器、又不至于让用户等到怀疑人生"的折中；
+    /// 达到上限时**如实标注"结果可能不完整"**（对抗式评审 F-12）。
     /// </summary>
-    public const int MaxFilesPerItem = 200_000;
+    public const int MaxFilesPerItem = 20_000;
 
-    /// <summary>触发枚举上限时给用户看的说明。</summary>
+    /// <summary>
+    /// 单项扫描的时间预算（默认 15 秒）。
+    /// 实测依据：`%LOCALAPPDATA%\pnpm\store` 这类内容寻址缓存可达十几万个小文件，
+    /// 单是枚举就远超 20 秒——没有时间预算，一次性扫描就会卡在这种目录上。
+    /// 超时不是失败：已收集的部分照常处理，并在条目上如实标注"结果可能不完整"。
+    /// </summary>
+    public static readonly TimeSpan DefaultItemTimeBudget = TimeSpan.FromSeconds(15);
+
     private static readonly string TruncationNote =
-        $"该目录下文件数超过 {MaxFilesPerItem} 个枚举上限，本次结果可能不完整（建议先在文件管理器里看看这个目录的规模）";
+        $"该目录规模超出本工具的单项上限（{MaxFilesPerItem} 个文件或 {DefaultItemTimeBudget.TotalSeconds:0} 秒），本次结果可能不完整（建议先在文件管理器里看看这个目录的规模）";
 
     /// <param name="selectors">
     /// 各清理项的"候选收窄器"（可选）。**它们只能把候选集收窄，不能扩大**——
@@ -53,7 +65,8 @@ public sealed class ScanEngine : IScanEngine
         IRecycleBinScanner? recycleBin = null,
         ILogSink? log = null,
         IEnumerable<IItemCandidateSelector>? selectors = null,
-        int maxFilesPerItem = MaxFilesPerItem)
+        int maxFilesPerItem = MaxFilesPerItem,
+        TimeSpan? itemTimeBudget = null)
     {
         _fileSystem = fileSystem;
         _environment = environment;
@@ -64,6 +77,7 @@ public sealed class ScanEngine : IScanEngine
         _log = log ?? SilentLogSink.Instance;
         _selectors = selectors?.Where(selector => selector is not null).ToList() ?? new List<IItemCandidateSelector>();
         _maxFilesPerItem = maxFilesPerItem > 0 ? maxFilesPerItem : MaxFilesPerItem;
+        _itemTimeBudget = itemTimeBudget ?? DefaultItemTimeBudget;
     }
 
     /// <summary>
@@ -155,6 +169,7 @@ public sealed class ScanEngine : IScanEngine
         var missing = new List<string>();
         var counter = 0;
         var truncated = false;
+        var budget = System.Diagnostics.Stopwatch.StartNew();
 
         foreach (var rule in item.Targets)
         {
@@ -211,17 +226,19 @@ public sealed class ScanEngine : IScanEngine
                     var recurse = rule.Kind == TargetKind.DirectoryTree || rule.Recurse;
                     foreach (var directory in directories)
                     {
-                        foreach (var file in _fileSystem.EnumerateFiles(directory, rule.Pattern, recurse))
+                        // 用惰性枚举：每产出一个文件就能检查取消；一次性的 EnumerateFiles 会把整棵树先物化，
+                        // 真实机器上大目录树会让扫描"卡在枚举里"，取消按钮形同虚设（实测缺陷）
+                        foreach (var file in _fileSystem.EnumerateFilesStreaming(directory, rule.Pattern, recurse, cancellationToken))
                         {
                             if (++counter % CancellationCheckInterval == 0)
                             {
                                 cancellationToken.ThrowIfCancellationRequested();
                             }
 
-                            if (candidates.Count >= _maxFilesPerItem)
+                            if (candidates.Count >= _maxFilesPerItem || budget.Elapsed > _itemTimeBudget)
                             {
-                                // 枚举上限：畸形目录树（几十万文件、junction 环）不能让整次扫描变成"假死"。
-                                // 已收集的部分照常处理，并在条目上如实标注"可能不完整"（对抗式评审 F-12）。
+                                // 两条界限：文件数上限与时间预算。畸形目录树（十几万小文件、junction 环）
+                                // 不能让整次扫描变成"假死"；已收集的部分照常处理，并如实标注"可能不完整"。
                                 truncated = true;
                                 return (candidates, null, truncated);
                             }
