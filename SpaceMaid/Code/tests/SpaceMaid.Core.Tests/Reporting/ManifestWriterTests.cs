@@ -74,7 +74,7 @@ public class ManifestWriterTests
         var lines = File.ReadAllLines(paths.CsvPath);
 
         Assert.Equal(ManifestWriter.CsvHeader, lines[0]);
-        Assert.Equal(plan.PlannedFileCount + 1, lines.Length);            // 穷尽性：每个文件一行
+        Assert.Equal(plan.ManifestFileCount + 1, lines.Length);           // 穷尽性：每个文件一行（含信息项）
         Assert.Contains(lines, l => l.Contains(@"C:\Chat\c.dat") && l.Contains("本次未勾选"));
         Assert.All(lines.Skip(1), l => Assert.Equal(9, CountCsvFields(l)));
     }
@@ -153,7 +153,7 @@ public class ManifestWriterTests
         var paths = _writer.Write(plan, root.Combine("reports"));
         var index = ManifestWriter.BuildIndex(plan, paths.Directory);
 
-        Assert.Equal(plan.PlannedFileCount, index.Rows.Count);
+        Assert.Equal(plan.ManifestFileCount, index.Rows.Count);
     }
 
     private static int CountCsvFields(string line)

@@ -14,8 +14,12 @@ internal static class PlanFixtures
 {
     public static readonly DateTimeOffset Now = new(2026, 9, 20, 14, 30, 0, TimeSpan.FromHours(8));
 
-    public static ScanFile File(string path, long size, int daysAgo = 1) =>
-        new(path, size, Now.AddDays(-daysAgo), CleanActionKind.Quarantine);
+    public static ScanFile File(
+        string path,
+        long size,
+        int daysAgo = 1,
+        CleanActionKind action = CleanActionKind.Quarantine) =>
+        new(path, size, Now.AddDays(-daysAgo), action);
 
     public static ScanEntry Entry(CleanItemDefinition item, params ScanFile[] files) =>
         new(item, files.Sum(f => f.Size), files.Length, 0, files, true, null);

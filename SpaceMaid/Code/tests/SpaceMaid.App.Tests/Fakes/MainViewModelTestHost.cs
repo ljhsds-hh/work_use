@@ -19,7 +19,8 @@ public sealed class MainViewModelTestHost
         long quarantineFreeBytes = 0,
         bool scanRootMissing = false,
         int retentionDays = 7,
-        bool elevated = true)
+        bool elevated = true,
+        bool includePageFile = false)
     {
         Settings = new AppSettings
         {
@@ -36,16 +37,24 @@ public sealed class MainViewModelTestHost
             environment: new FixedEnvironmentProbe(elevated: elevated),
             log: SilentLogSink.Instance);
 
+        var entries = new List<ScanEntry>
+        {
+            Entry("l1.user-temp", 1024L * 1024 * 512, 12),
+            Entry("l2.browser-cache", 1024L * 1024 * 1024 * 3, 40),
+            Entry("l2.windows-old", 1024L * 1024 * 1024 * 8, 900),
+            Entry("l3.chat-cache", 1024L * 1024 * 1024 * 5, 60),
+            Entry("l3.hibernate", 1024L * 1024 * 1024 * 6, 1),
+            Entry("rb.recycle-bin", 1024L * 1024 * 2048, 30)
+        };
+
+        // 页面文件（信息项）：默认关掉，只有专门验证"体积口径"的用例打开它
+        if (includePageFile)
+        {
+            entries.Add(Entry("l3.pagefile", 16L * 1024 * 1024 * 1024, 1));
+        }
+
         Report = new ScanReport(
-            new[]
-            {
-                Entry("l1.user-temp", 1024L * 1024 * 512, 12),
-                Entry("l2.browser-cache", 1024L * 1024 * 1024 * 3, 40),
-                Entry("l2.windows-old", 1024L * 1024 * 1024 * 8, 900),
-                Entry("l3.chat-cache", 1024L * 1024 * 1024 * 5, 60),
-                Entry("l3.hibernate", 1024L * 1024 * 1024 * 6, 1),
-                Entry("rb.recycle-bin", 1024L * 1024 * 2048, 30)
-            },
+            entries,
             new VolumeSnapshot(@"C:\", 500L * 1024 * 1024 * 1024, 120L * 1024 * 1024 * 1024),
             new DateTimeOffset(2026, 1, 1, 10, 0, 0, TimeSpan.FromHours(8)));
 

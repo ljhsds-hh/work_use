@@ -40,9 +40,32 @@ public sealed record CleanPlan(
 {
     public IEnumerable<CleanPlanItem> Checked => Items.Where(i => i.UserChecked);
 
-    public int PlannedFileCount => Items.Sum(i => i.Files.Count);
+    /// <summary>
+    /// 会真正执行动作的条目。信息项（页面文件，需求 2.4）**永远不执行**——`CleanExecutor` 直接跳过它、
+    /// 界面上连勾选框都没有、`Denylist` 也硬拦着 `pagefile.sys`——因此它不属于任何"将处理"的口径。
+    /// </summary>
+    public IEnumerable<CleanPlanItem> Actionable =>
+        Items.Where(i => i.ActionKind != CleanActionKind.InformationalOnly);
 
-    public long PlannedBytes => Items.Sum(i => i.TotalBytes);
+    /// <summary>只展示、不执行的条目（页面文件）。</summary>
+    public IEnumerable<CleanPlanItem> Informational =>
+        Items.Where(i => i.ActionKind == CleanActionKind.InformationalOnly);
+
+    /// <summary>本次计划处理的文件数（不含信息项）。</summary>
+    public int PlannedFileCount => Actionable.Sum(i => i.Files.Count);
+
+    /// <summary>本次计划处理的体积之和（不含信息项）。</summary>
+    public long PlannedBytes => Actionable.Sum(i => i.TotalBytes);
+
+    /// <summary>
+    /// 清单里出现的文件行数（**含**信息项那一行），与导出的 csv 数据行数一一对应。
+    /// 清单完整性/复核基准比对必须用它；用 <see cref="PlannedFileCount"/> 会因为信息项永远差一行
+    /// （真机清单：39134 行 = 39133 个可处理 + 1 个页面文件）。
+    /// </summary>
+    public int ManifestFileCount => Items.Sum(i => i.Files.Count);
+
+    /// <summary>仅展示、不执行的体积之和。单独说明给用户看，**不并入** <see cref="PlannedBytes"/>。</summary>
+    public long InformationalBytes => Informational.Sum(i => i.TotalBytes);
 }
 
 /// <summary>执行选项。</summary>

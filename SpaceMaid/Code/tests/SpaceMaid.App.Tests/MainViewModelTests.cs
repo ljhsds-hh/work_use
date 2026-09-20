@@ -268,7 +268,7 @@ public class MainViewModelTests
         var csvRows = File.ReadAllLines(Path.Combine(planDirectory, "清单.csv"))
             .Skip(1)
             .Count(line => line.Trim().Length > 0);
-        Assert.Equal(executedPlan.PlannedFileCount, csvRows);
+        Assert.Equal(executedPlan.ManifestFileCount, csvRows);
 
         // 并且基于这份清单产出了复核报告
         Assert.True(host.ViewModel.HasReviewReport);
@@ -292,7 +292,7 @@ public class MainViewModelTests
 
         await host.ViewModel.CleanSelectedAsync();
 
-        Assert.True(host.Executor.LastPlan!.PlannedFileCount > exportedRowCount,
+        Assert.True(host.Executor.LastPlan!.ManifestFileCount > exportedRowCount,
             "本用例前提是执行集合确实比导出的清单更大");
         Assert.Contains("不一致", host.ViewModel.StatusMessage);
     }
@@ -353,6 +353,49 @@ public class MainViewModelTests
         Assert.True(host.ViewModel.UsedPercent <= 1);
         Assert.Equal(4, host.ViewModel.Sections.Count);
         Assert.All(host.ViewModel.Sections, s => Assert.True(s.HasItems));
+    }
+
+    // ── 需求 2.4 / 3.1-4：信息项（页面文件）的体积绝不算进"本次可处理" ──
+
+    [Fact]
+    public async Task Processable_bytes_should_exclude_informational_items()
+    {
+        var host = new MainViewModelTestHost(includePageFile: true);
+        await host.ViewModel.InitializeAsync();
+        await host.ViewModel.RescanAsync();
+
+        var pageFile = host.Report.Find("l3.pagefile")!;
+        var processable = host.Report.Entries
+            .Where(e => e.Available
+                        && e.Item.ActionKind != CleanActionKind.InformationalOnly
+                        && (e.HasContent || e.Item.ActionKind is CleanActionKind.HibernateOff or CleanActionKind.DismComponentCleanup))
+            .Sum(e => e.TotalBytes);
+
+        Assert.Equal(16L * 1024 * 1024 * 1024, pageFile.TotalBytes);
+        Assert.Equal(processable, host.ViewModel.ProcessableBytes);
+        Assert.True(host.ViewModel.ProcessableBytes < host.Report.TotalBytes,
+            "页面文件（15/16 GB 级）一旦算进可处理量，界面就在承诺一件不会发生的事");
+        Assert.DoesNotContain("16 GB", host.ViewModel.TotalProcessableText);
+
+        // 它的体积仍然要看得见：档位小计单独标注，而不是直接藏掉
+        var l3 = host.ViewModel.Sections.Single(s => s.Category == CleanCategory.L3Cautious);
+        Assert.Equal(16L * 1024 * 1024 * 1024, l3.InformationalBytes);
+        Assert.Contains("仅展示", l3.CountText);
+        Assert.DoesNotContain("16 GB", l3.TotalText);
+    }
+
+    [Fact]
+    public async Task Informational_item_should_not_be_checkable_or_counted_in_confirmation()
+    {
+        var host = new MainViewModelTestHost(includePageFile: true);
+        await host.ViewModel.InitializeAsync();
+        await host.ViewModel.RescanAsync();
+
+        var pageFile = host.ViewModel.Items.Single(i => i.ItemId == "l3.pagefile");
+
+        Assert.False(pageFile.ShowCheckBox);
+        Assert.False(pageFile.IsChecked);
+        Assert.DoesNotContain(host.ViewModel.Items.Where(i => i.IsChecked), i => i.ItemId == "l3.pagefile");
     }
 
     // ── 需求 3.3-3：全选/反选只作用于当前分级 ──

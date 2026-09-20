@@ -502,7 +502,7 @@ public sealed class MainViewModel : ViewModelBase
             UpdateVolumeOverview(report);
             ApplyReport(report);
 
-            StatusMessage = $"扫描完成：共 {Items.Count} 项，可处理 {ProcessableText}（{report.TotalFiles} 个文件）。";
+            StatusMessage = $"扫描完成：共 {Items.Count} 项，可处理 {ProcessableText}（{report.Entries.Where(IsProcessable).Sum(e => (long)e.FileCount)} 个文件）。";
             ProgressText = StatusMessage;
             OnPropertyChanged(nameof(HasScanResult));
             OnPropertyChanged(nameof(CanExportManifest));
@@ -589,14 +589,27 @@ public sealed class MainViewModel : ViewModelBase
         VolumeTotalBytes = report.Volume.TotalBytes;
         VolumeFreeBytes = report.Volume.FreeBytes;
 
-        // "本次可处理"= 清单里所有可执行项的体积之和（含命令型动作，它们没有文件但有实际收益）
+        // "本次可处理"= 清单里所有**会执行**的条目的体积之和（含命令型动作，它们没有文件但有实际收益）。
+        // 信息项（页面文件，需求 2.4）必须排除：它只展示体积、永不执行，算进来就是向用户承诺
+        // 一件不会发生的事（真机 19 项里那一项就是 15 GB 的 C:\pagefile.sys，占了"可处理"总量的 70%）。
         ProcessableBytes = report.Entries
-            .Where(e => e.Available && (e.HasContent || e.Item.ActionKind is CleanActionKind.HibernateOff or CleanActionKind.DismComponentCleanup))
+            .Where(IsProcessable)
             .Sum(e => e.TotalBytes);
 
         OnPropertyChanged(nameof(DiskHeadline));
         OnPropertyChanged(nameof(SameVolumeNotice));
     }
+
+    /// <summary>
+    /// 一个扫描条目是否计入"本次可处理"：
+    /// ① 必须是可用项；② 有内容的文件型条目，或没有文件但有实际收益的命令型条目（休眠 / DISM）；
+    /// ③ **排除信息项**——页面文件这类条目界面只展示体积、永不执行（需求 2.4）。
+    /// 清单头部（<c>CleanPlan.PlannedBytes</c>）用的是同一判据，两边必须一致，否则界面与清单会各说一个数。
+    /// </summary>
+    private static bool IsProcessable(ScanEntry entry) =>
+        entry.Available
+        && entry.Item.ActionKind != CleanActionKind.InformationalOnly
+        && (entry.HasContent || entry.Item.ActionKind is CleanActionKind.HibernateOff or CleanActionKind.DismComponentCleanup);
 
     private void OnItemCheckedChanged()
     {
@@ -782,7 +795,9 @@ public sealed class MainViewModel : ViewModelBase
 
             // ② 复核基准 = 本次执行的清单（而不是早先那份可能已经过期的导出）
             reviewIndex = _bridge.BuildManifestIndex(plan, executedPaths.Directory);
-            reviewBasisChanged = _manifestIndex is not null && _manifestIndex.Rows.Count != plan.PlannedFileCount;
+            // 这里比的是"清单行数"，所以必须用 ManifestFileCount（含信息项那一行）。
+            // 用 PlannedFileCount 会因为信息项永远差一行，导致每次都误报"勾选被改动过"。
+            reviewBasisChanged = _manifestIndex is not null && _manifestIndex.Rows.Count != plan.ManifestFileCount;
             _manifestIndex = reviewIndex;
             _manifestDirectory = executedPaths.Directory;
 
@@ -1088,11 +1103,17 @@ public sealed class CleanSectionViewModel : ViewModelBase
 
     public bool HasItems => Items.Count > 0;
 
-    public long TotalBytes => Items.Sum(i => i.TotalBytes);
+    /// <summary>本档**会执行**的体积之和。信息项（页面文件）不算进来，否则档位小计会虚高。</summary>
+    public long TotalBytes => Items.Where(i => !i.IsInformationalOnly).Sum(i => i.TotalBytes);
+
+    /// <summary>本档仅展示、不执行的体积（页面文件）。</summary>
+    public long InformationalBytes => Items.Where(i => i.IsInformationalOnly).Sum(i => i.TotalBytes);
 
     public string TotalText => MainViewModel.FormatBytes(TotalBytes);
 
-    public string CountText => $"{Count} 项 / {TotalText}";
+    public string CountText => InformationalBytes > 0
+        ? $"{Count} 项 / {TotalText}（另有仅展示 {MainViewModel.FormatBytes(InformationalBytes)}，不会清理）"
+        : $"{Count} 项 / {TotalText}";
 
     public bool IsExpanded
     {

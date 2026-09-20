@@ -50,7 +50,7 @@ public sealed class ManifestWriter
                     file.LastWrite,
                     ActionText(item.ActionKind),
                     Restorable: item.ActionKind is CleanActionKind.Quarantine,
-                    Note: item.UserChecked ? string.Empty : "本次未勾选"));
+                    Note: NoteText(item)));
             }
         }
 
@@ -66,7 +66,7 @@ public sealed class ManifestWriter
         {
             foreach (var file in item.Files)
             {
-                var note = item.UserChecked ? string.Empty : "本次未勾选";
+                var note = NoteText(item);
                 builder.AppendLine(string.Join(',',
                     Csv(CategoryText(item.Category)),
                     Csv(item.ItemId),
@@ -92,6 +92,14 @@ public sealed class ManifestWriter
         builder.AppendLine($"- 扫描时间：{plan.Scan.ScannedAt:yyyy-MM-dd HH:mm:ss zzz}");
         builder.AppendLine($"- 系统盘：{plan.Scan.Volume.Drive}（总容量 {VolumeTextFormatter.FormatBytes(plan.Scan.Volume.TotalBytes)}，可用 {VolumeTextFormatter.FormatBytes(plan.Scan.Volume.FreeBytes)}）");
         builder.AppendLine($"- 本次计划处理：{plan.PlannedFileCount} 个文件，共 {VolumeTextFormatter.FormatBytes(plan.PlannedBytes)}");
+
+        // 信息项（页面文件）必须单独说：它占空间但永不执行，混进"计划处理"就是虚报
+        // （真机清单曾经写成"39134 个文件，共 21.32 GB"，其中 15 GB 是 C:\pagefile.sys）。
+        if (plan.InformationalBytes > 0)
+        {
+            var described = string.Join('、', plan.Informational.Select(i => $"{i.DisplayName} {VolumeTextFormatter.FormatBytes(i.TotalBytes)}"));
+            builder.AppendLine($"- 仅展示、不执行：{described}（不计入上面的可处理体积）");
+        }
         builder.AppendLine($"- 隔离区口径：{(plan.SameVolumeAsSource ? "与源文件同卷——清理后 C 盘空间不会立刻释放" : "位于其他盘——文件移出后立即释放")}");
         builder.AppendLine();
         builder.AppendLine("> 本清单只用于审阅。执行清理是一个单独的人工动作，导出清单本身不做任何删除或移动。");
@@ -113,7 +121,7 @@ public sealed class ManifestWriter
                 builder.AppendLine($"### {item.DisplayName}{(string.IsNullOrWhiteSpace(item.ActionNote) ? string.Empty : $"（{item.ActionNote}）")}");
                 builder.AppendLine();
                 builder.AppendLine($"- 项目 Id：`{item.ItemId}`");
-                builder.AppendLine($"- 本次状态：{(item.UserChecked ? "已勾选，会被处理" : "未勾选，本次不处理")}");
+                builder.AppendLine($"- 本次状态：{StatusText(item)}");
                 builder.AppendLine($"- 动作：{ActionText(item.ActionKind)}；可还原：{(item.ActionKind is CleanActionKind.Quarantine ? "是（隔离区保留期内）" : "否")}");
                 builder.AppendLine($"- 体积：{VolumeTextFormatter.FormatBytes(item.TotalBytes)}（{item.Files.Count} 个文件）");
 
@@ -178,6 +186,21 @@ public sealed class ManifestWriter
         CleanActionKind.InformationalOnly => "仅展示，不执行",
         _ => kind.ToString()
     };
+
+    /// <summary>
+    /// 清单里的"本次状态"。信息项必须与普通项区分开：它不是"这次没勾选"，而是**永远不执行**——
+    /// 写成"未勾选，本次不处理"会让人以为下次勾上就能清掉。
+    /// </summary>
+    internal static string StatusText(CleanPlanItem item) =>
+        item.ActionKind == CleanActionKind.InformationalOnly
+            ? "仅展示，不执行（本项不会清理任何文件）"
+            : item.UserChecked ? "已勾选，会被处理" : "未勾选，本次不处理";
+
+    /// <summary>csv/索引里每行的备注（复核脚本按这一列判断该行是否参与执行）。</summary>
+    internal static string NoteText(CleanPlanItem item) =>
+        item.ActionKind == CleanActionKind.InformationalOnly
+            ? "仅展示项，不计入本次可处理体积"
+            : item.UserChecked ? string.Empty : "本次未勾选";
 
     private static string Csv(string value)
     {
