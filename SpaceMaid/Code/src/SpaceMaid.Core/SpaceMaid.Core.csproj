@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- 内核类库：零 WPF 依赖（由 StaticSafetyTests 守住），可独立单测 -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>SpaceMaid.Core</RootNamespace>
+    <AssemblyName>SpaceMaid.Core</AssemblyName>
+    <Version>1.0.0</Version>
+    <Description>SpaceMaid 清理内核：扫描、隔离区、执行与报告（不依赖界面）</Description>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

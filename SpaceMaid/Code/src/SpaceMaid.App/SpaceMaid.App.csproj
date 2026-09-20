@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>SpaceMaid.App</RootNamespace>
+    <AssemblyName>SpaceMaid</AssemblyName>
+    <Version>1.0.0</Version>
+    <Description>SpaceMaid C 盘空间管家：分级清理 + 全量隔离区 + 清单审核流程</Description>
+    <!-- 需求 3.6：exe 固定以管理员身份运行（一次 UAC） -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- 单文件独立发布参数（Release 配置生效）：win-x64 免安装单文件 EXE -->
+    <RuntimeIdentifier Condition="'$(Configuration)' == 'Release'">win-x64</RuntimeIdentifier>
+    <SelfContained Condition="'$(Configuration)' == 'Release'">true</SelfContained>
+    <PublishSingleFile Condition="'$(Configuration)' == 'Release'">true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile Condition="'$(Configuration)' == 'Release'">true</EnableCompressionInSingleFile>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+    <SatelliteResourceLanguages>zh-Hans;en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- UI 组件库：HandyControl（需求强制规范，优先用 HC 控件，缺失才用 WPF 原生） -->
+    <PackageReference Include="HandyControl" Version="3.5.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpaceMaid.Core\SpaceMaid.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 图标由 Code/scripts/gen-icon.ps1 程序化生成（勿手工编辑） -->
+    <Resource Include="Assets\app.ico" Condition="Exists('Assets\app.ico')" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="Exists('Assets\app.ico')">
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+</Project>

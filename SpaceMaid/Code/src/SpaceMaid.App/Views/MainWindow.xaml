@@ -1,0 +1,18 @@
+<Window x:Class="SpaceMaid.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:hc="https://handyorg.github.io/handycontrol"
+        Title="SpaceMaid C 盘空间管家"
+        Width="1000" Height="700"
+        WindowStartupLocation="CenterScreen">
+    <!-- Task 13 会替换为三段式正式界面；此处仅保证骨架可编译可启动 -->
+    <hc:SimplePanel Margin="24">
+        <hc:Card>
+            <StackPanel Margin="20">
+                <TextBlock Text="SpaceMaid C 盘空间管家" FontSize="20" FontWeight="Bold" />
+                <TextBlock Margin="0,12,0,0" TextWrapping="Wrap"
+                           Text="骨架已就绪。清理清单、隔离区与审核流程将在后续任务中接入。" />
+            </StackPanel>
+        </hc:Card>
+    </hc:SimplePanel>
+</Window>

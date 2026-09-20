@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SpaceMaid.Core/SpaceMaid.Core.csproj" />
+    <Project Path="src/SpaceMaid.App/SpaceMaid.App.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SpaceMaid.Core.Tests/SpaceMaid.Core.Tests.csproj" />
+    <Project Path="tests/SpaceMaid.App.Tests/SpaceMaid.App.Tests.csproj" />
+  </Folder>
+</Solution>
