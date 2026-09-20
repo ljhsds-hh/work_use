@@ -49,9 +49,20 @@ public interface IShellService
 /// </summary>
 public sealed class DialogService : IDialogService
 {
+    /// <summary>
+    /// 可用的宿主窗口：必须**已经显示出来**才能当 Owner——WPF 的 "无法将 Owner 属性设置为之前未显示的 Window"
+    /// 就是这么来的（启动自检弹"权限不足"时，主窗已经建好但还没 Show）。
+    /// 拿不到合适的宿主就退回无 Owner 的模态框：它一样在前台，不影响用户看到提示。
+    /// </summary>
+    private static System.Windows.Window? HostWindow()
+    {
+        var main = Application.Current?.MainWindow;
+        return main is { IsLoaded: true } ? main : null;
+    }
+
     public bool Confirm(string message, string title)
     {
-        var owner = Application.Current?.MainWindow;
+        var owner = HostWindow();
         var result = owner is null
             ? HandyControl.Controls.MessageBox.Show(
                 message, title, MessageBoxButton.OKCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel)
@@ -63,7 +74,7 @@ public sealed class DialogService : IDialogService
 
     public void Warn(string message, string title)
     {
-        var owner = Application.Current?.MainWindow;
+        var owner = HostWindow();
         if (owner is null)
         {
             HandyControl.Controls.MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Warning, MessageBoxResult.OK);

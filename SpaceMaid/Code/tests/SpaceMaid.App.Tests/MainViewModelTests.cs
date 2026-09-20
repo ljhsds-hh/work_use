@@ -209,6 +209,21 @@ public class MainViewModelTests
     // ── 需求 4.3-5（I-6）：不存在任何"绕过确认 / 强制清理"的开关 ──
 
     [Fact]
+    public void Open_settings_command_should_raise_the_request_event()
+    {
+        // ViewModel 只发"请求"，由 View 决定怎么开窗；这条用例保证请求真的发得出去。
+        // （曾漏过的是 View 侧的订阅，那条由 StaticSafetyTests 守着。）
+        var host = new MainViewModelTestHost();
+        var raised = 0;
+        host.ViewModel.RequestOpenSettings += () => raised++;
+
+        host.ViewModel.OpenSettingsCommand.Execute(null);
+        host.ViewModel.NavigateCommand.Execute("settings");
+
+        Assert.Equal(2, raised);
+    }
+
+    [Fact]
     public void Should_not_offer_bypass_switch()
     {
         var forbidden = new[] { "force", "bypass", "skipconfirm", "noconfirm", "silent", "autoclean" };

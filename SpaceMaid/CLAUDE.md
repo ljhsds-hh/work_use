@@ -139,6 +139,44 @@ Windows 桌面 C 盘（系统盘）空间清理工具（work_use 工具集之一
 
 > 注意：全局约束里的"**不得实现 `/ResetBase`**"指的是**实现**（命令参数），`DismComponentCleanup.Arguments` 常量里确实没有它，参数也不接受外部拼装。
 
+## 界面设计系统（2026-09-20 重做，改界面前必读）
+
+界面从"控件堆叠"重做成一套完整设计系统。三条硬规则：
+
+1. **颜色只来自 HandyControl 皮肤**（`App.xaml` 合并 `SkinDefault.xaml` + `Theme.xaml`），
+   界面里一律写 `{DynamicResource PrimaryBrush / RegionBrush / SecondaryRegionBrush / BorderBrush /
+   PrimaryTextBrush / SecondaryTextBrush / ThirdlyTextBrush / DangerBrush / LightDangerBrush / DarkDangerBrush …}`。
+   **不写任何色值**：`StaticSafetyTests.App_xaml_should_not_hardcode_colors` 会拦 `#RRGGBB` / 字面量 `Color=` /
+   `SolidColorBrush`（注释不算、`Color="{DynamicResource X}"` 不算——这条断言已按这两点收紧，别改回去）。
+2. **尺度只来自 `Themes/DesignTokens.xaml`**：字号 `SmFontSize*`（30/22/16/13/12/11）、间距 `SmSpace*`(4/8/12/16/20/24/32)、
+   圆角 `SmRadius*`、文字样式 `SmTextDiskplay/Metric/Title/Section/Body/Caption/Meta/Label/Danger`、
+   图标 `SmIcon*`（18 个 24×24 填充路径，`Path Stretch="Uniform"` 缩放）、按钮 `SmButtonPrimary/Secondary/Danger/Ghost/Link`、
+   色标 `SmChip/ChipSafe/ChipAccent/ChipInfo/ChipCaution/ChipDanger`（**Border 目标类型**，不是 hc:Tag）、
+   导航项 `SmNavItem`(RadioButton) / `SmNavAction`(Button，用于"设置"这种动作项)。
+3. **交互控件优先 HandyControl**：`hc:TextBox` / `hc:NumericUpDown` / `hc:ToggleBlock` / `hc:TabControl` /
+   `hc:CircleProgressBar` / `hc:Card` / `hc:Divider` / `hc:ScrollViewer` / `hc:Empty` / `hc:LoadingLine` / `hc:Growl`。
+   **HC 3.5.1 没有** Button / CheckBox / Switch / Expander / ProgressBar → 这五类用 WPF 原生控件；
+   其中**按钮外观由本设计系统自带 ControlTemplate**（见下面易踩坑第 6 条）。
+
+主窗结构（`Views/MainWindow.xaml`）：左侧导航栏（212px，品牌 + 三个页面 + 设置动作 + C 盘可用空间）
++ 右侧内容区（页头 64px：页面标题/副标题 + 四个操作按钮 → 全局提示条 → 页面 → 状态栏 38px）。
+三个页面：**磁盘概览**（占用环 + 本次可处理主数字 + 三格 KPI + 四个分级卡片 + 隔离区摘要 + 最近执行结果）、
+**清理计划**（本分级工具条 + 扫描中/空态 + 四个分级分组 + 项行 + 执行结果）、**隔离区**（占用 + 批次列表 + 还原）。
+设置窗口（`Views/SettingsWindow.xaml`）同套令牌：页头 + `hc:TabControl` 三页卡片 + 页脚"保存/关闭"。
+
+### 界面验证（本机看不了图，只能这样验）
+
+```powershell
+# 启动应用（dotnet 宿主绕开 requireAdministrator 的 UAC）→ 点掉"权限不足"闸门 → 点「重新扫描」→
+# 逐页导出 UIA 树 + PrintWindow 像素统计 → 12 条断言 → 截图落 D:\logs\SpaceMaid\ui\
+powershell -NoProfile -ExecutionPolicy Bypass -File SpaceMaid\Code\scripts\probe-ui.ps1
+```
+
+断言覆盖：主窗标题、扫描能跑完（只读）、清理计划页元素数、隔离区页元素数、
+**导航栏与页头表面亮度差 ≥ 8**（层级）、**横带亮度极差 ≥ 8**（上下有层次）、最高频色占比 ≤ 90%（不是一片死白）、
+颜色数 ≥ 120、设置窗口能打开且有「保存设置」、截图字节数。
+脚本**只点这几个按钮**：重新扫描 / 左侧导航 / 设置 / 关闭——绝不点清理、清空、还原。
+脚本带 UTF-8 BOM（PS 5.1 才按 UTF-8 解析中文），别去掉。
 ## 验证方式
 
 `dotnet test Code/space-maid.slnx`
@@ -178,6 +216,8 @@ dotnet test Code/space-maid.slnx --filter FullyQualifiedName~Cli
 dotnet test Code/tests/SpaceMaid.Core.Tests/SpaceMaid.Core.Tests.csproj
 ```
 
+> 界面不是只能"人工看"：`Code/scripts/probe-ui.ps1` 用 UIA 树 + 窗口像素统计给出 12 条可复跑断言（见上节）。
+
 测试纪律：
 
 - 一切 IO 测试的根目录必须在 `%TEMP%\spacemaid-tests-<guid>` 下，并在 `finally` 中删除；**测试不得触碰真实系统目录**（`C:\Windows\*` 等）
@@ -206,6 +246,24 @@ dotnet test Code/tests/SpaceMaid.Core.Tests/SpaceMaid.Core.Tests.csproj
 3. **隔离区路径校验的两个目录强度不一样**（`QuarantinePathValidator`）。真正落地的是 `<基路径>\SpaceMaid\Quarantine`，它才是**强校验**对象：既不能落在禁止目录树里，也不能命中凭据/还原点等禁止段。**基路径只拒绝落在禁止树内的**（网络路径、磁盘根、不可写一律仍然拒绝），**不能再对基路径用 `Denylist.IsDenied` 整体判定**——默认基路径就是 `%LOCALAPPDATA%`，而它是禁止清单里的"用户目录根本身"，一旦那样判，默认配置开箱即"隔离区不可用"，整条清理链路都跑不起来。提交 `2fd7422`
 4. **信息项的体积绝不能算进"可处理"口径**（本机真机 dry-run 实测踩到）。`l3.pagefile` 的 `ActionKind` 是 `InformationalOnly`——它只展示体积、**永不执行**（`CleanExecutor` 直接跳过、界面连勾选框都没有、`Denylist` 还硬拦着 `pagefile.sys`）。早先 `MainViewModel.ProcessableBytes` 与 `CleanPlan.PlannedFileCount/PlannedBytes` 把它一起求和，于是同一台机器报出"39134 个文件，21.32 GB / 可处理 21.32 GB"，其中约 **15 GB 是 `C:\pagefile.sys`**，占"可处理"总量的七成——这等于向用户承诺一件不会发生的事。修正后的口径是：界面 `IsProcessable` 与清单 `CleanPlan.Actionable` **必须用同一判据**（排除 `InformationalOnly`），清单额外单列一行"仅展示、不执行：页面文件 15 GB（不计入上面的可处理体积）"。修正后同机实测为 **39145 个文件 / 6.32 GB**。**改体积求和的地方先问一句"这一项到底会不会执行"**
 5. **"清单行数"与"计划文件数"不是一回事**。清单 csv 里信息项也占一行，所以复核基准必须比 `ManifestFileCount`；拿 `PlannedFileCount` 去比会因为信息项永远差一行，**每次都误报"勾选被改动过"**
+
+6. **设计令牌键不能重复，引用不能打错**。重复键会让 WPF 在**运行期**抛 `Item has already been added. Key in dictionary: 'X'`
+   并让整个界面启动失败（本轮真的撞上过：几何 `SmIconWarning` 与样式 `SmIconWarning` 同名）。
+   引用不存在的 `Sm*` 键则抛"找不到名为 X 的资源"；`DynamicResource` 更阴——它只是静默变 null（界面看起来"没上色"）。
+   现在两条都由 `StaticSafetyTests.Design_tokens_should_be_unique_and_referenced_keys_should_exist` 守着。
+7. **不要 `BasedOn` HandyControl 的按钮样式键**。HC 3.5.1 的键名不全可靠：`ButtonPrimary`/`ButtonDefault`/`ButtonDanger` 在，
+   但 **`ButtonTransparent` 不存在**（`BasedOn` 它会让启动直接抛"找不到资源"）。按钮外观已改为本设计系统自带模板。
+8. **启动顺序：主窗必须先登记为 `Application.MainWindow`，再跑 `viewModel.Initialize()`**。
+   Initialize 里会弹"权限不足"对话框（需求 3.6-2），而 WPF 把**第一个显示出来的窗口**记为 `Application.MainWindow`；
+   配合 `ShutdownMode.OnMainWindowClose`，那个对话框一被点掉就把整个应用关掉——真机现象是
+   "未提权启动 → 点掉提示 → 程序直接消失"。`StaticSafetyTests.App_should_register_main_window_before_running_startup_checks` 守着这个顺序。
+9. **对话框的 Owner 必须是"已显示"的窗口**，否则 WPF 抛"无法将 Owner 属性设置为之前未显示的 Window"。
+   `DialogService.HostWindow()` 用 `IsLoaded` 判断，拿不到就退回无 Owner 的模态框。
+10. **事件订阅容易漏**。`RequestOpenSettings` 曾经**没人订阅**：ViewModel 侧事件、命令、导航分支都齐了，
+    结果「设置」按钮点下去毫无反应，设置面板整块进不去，而界面上看不出任何异常。
+    `StaticSafetyTests.App_should_wire_settings_request_from_viewmodel` 守着 `+=` / `-=` 成对存在。
+11. **界面相关的坑只有把界面真跑起来点一遍才会暴露**（启动失败、按钮没反应、颜色没上）。
+    改完界面**必须**跑 `probe-ui.ps1`，它会先把"权限不足"闸门点掉再验证真实主窗。
 
 ## 构建与发布
 

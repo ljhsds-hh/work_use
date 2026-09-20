@@ -2,170 +2,259 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:hc="https://handyorg.github.io/handycontrol"
-        xmlns:helpers="clr-namespace:SpaceMaid.App.Helpers"
         Title="SpaceMaid 设置"
-        Width="760" Height="600"
-        MinWidth="680" MinHeight="520"
+        Width="860" Height="680"
+        MinWidth="760" MinHeight="560"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
-        TextOptions.TextFormattingMode="Display">
+        Background="{DynamicResource BackgroundBrush}"
+        TextOptions.TextFormattingMode="Display"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
 
     <!--
-      设置页（需求 3.4 / 5.1-4）：
-      · 隔离区位置（选定即校验，Reject 不允许保存）
-      · 保留天数（1–365）
-      · 回收站范围（默认只处理系统盘）
-      · 立即清空隔离区（二次确认 + 写明不可还原）
-      · 报告与日志入口
+      设置页（需求 3.4 / 5.1-4）：隔离区位置 / 保留期与范围 / 报告与日志。
+      与主窗共用 Themes/DesignTokens.xaml：颜色取 HC 语义色，字号间距走令牌，
+      卡片用 hc:Card（HC 提供的卡片控件），输入控件用 hc:TextBox / hc:NumericUpDown / hc:ToggleBlock。
+      危险动作（立即清空隔离区）用红色语义按钮，与主窗的「清理选中项」同一套视觉语言（需求 5.3-3）。
     -->
 
-    <Window.Resources>
-        <helpers:BoolToVisibilityConverter x:Key="BoolToVisibility" />
-        <helpers:BoolToVisibilityConverter x:Key="InverseBoolToVisibility" Invert="True" />
-        <helpers:TextToVisibilityConverter x:Key="TextToVisibility" />
-    </Window.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-    <DockPanel Margin="{StaticResource SmPagePadding}">
+        <!-- 页头 -->
+        <Border Grid.Row="0" Padding="20,16"
+                Background="{DynamicResource RegionBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <StackPanel>
+                <TextBlock Style="{StaticResource SmTextPageTitle}" Text="设置" />
+                <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
+                           Text="隔离区位置、保留期与范围、报告与日志位置；所有改动都要点「保存设置」才生效。" />
+            </StackPanel>
+        </Border>
 
-        <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Name="SaveSettingsButton" Command="{Binding SaveCommand}" Content="保存设置"
-                    Style="{StaticResource ButtonPrimary}" />
-            <Button Name="CloseSettingsButton" Margin="8,0,0,0" Click="OnCloseClick" Content="关闭" />
-        </StackPanel>
-
-        <hc:TabControl>
-
-            <!-- ── 隔离区位置 ── -->
+        <!-- 内容 -->
+        <hc:TabControl Grid.Row="1" Margin="20,16,20,0" Background="Transparent" BorderThickness="0">
             <hc:TabItem Header="隔离区位置">
-                <StackPanel Margin="16">
-                    <TextBlock Style="{StaticResource SmTextBody}"
-                               Text="清理掉的文件不会直接删除，而是先移入隔离区：保留期内可以还原，保留期结束或手动清空后才真正释放。" />
-                    <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
-                               Text="建议把隔离区放在非系统盘（例如 D 盘）：放在 C 盘时，清理后 C 盘空间不会立刻释放。" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="2,16,2,16">
+                    <StackPanel>
+                        <!-- 基目录 -->
+                        <hc:Card Style="{StaticResource SmCard}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SmTextSection}" Text="隔离区基目录" />
+                                <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextBody}"
+                                           Text="清理掉的文件不会直接删除，而是先移入隔离区：保留期内可以还原，保留期结束或手动清空后才真正释放。" />
+                                <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
+                                           Text="建议放在非系统盘（例如 D 盘）：放在 C 盘时，清理后 C 盘空间不会立刻释放。" />
 
-                    <TextBlock Margin="0,16,0,0" Style="{StaticResource SmTextSection}" Text="基目录" />
-                    <Grid Margin="0,6,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <hc:TextBox Grid.Column="0" Name="QuarantinePathBox" IsReadOnly="True"
-                                    Text="{Binding QuarantineBasePath, Mode=OneWay}" />
-                        <Button Grid.Column="1" Name="PickFolderButton" Margin="8,0,0,0"
-                                Command="{Binding PickQuarantineFolderCommand}" Content="选择文件夹…" />
-                    </Grid>
-
-                    <TextBlock Margin="0,10,0,0" Style="{StaticResource SmTextCaption}"
-                               Text="实际存放位置（本工具只在该目录下建自己的子目录）" />
-                    <TextBlock Style="{StaticResource SmTextBody}" Text="{Binding QuarantineStoragePath, Mode=OneWay}" />
-
-                    <hc:Divider Margin="0,14,0,10" />
-
-                    <StackPanel Orientation="Horizontal">
-                        <hc:Tag Content="{Binding ValidationLevelText, Mode=OneWay}" />
-                        <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Style="{StaticResource SmTextDanger}"
-                                   Text="{Binding ValidationMessage, Mode=OneWay}" />
-                    </StackPanel>
-                    <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
-                               Text="{Binding ValidationDetail, Mode=OneWay}" />
-                    <TextBlock Margin="0,8,0,0" Style="{StaticResource SmTextDanger}"
-                               Text="当前位置不可用，保存已被拒绝。请换一个本地固定磁盘上的普通文件夹。"
-                               Visibility="{Binding IsRejected, Converter={StaticResource BoolToVisibility}}" />
-
-                    <TextBlock Margin="0,16,0,0" Style="{StaticResource SmTextSection}" Text="隔离区里的批次（保留期内可一键还原）" />
-                    <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
-                               Text="还原会把该批次的文件搬回原来的位置；原位置已有同名文件的会被跳过，不会被覆盖。" />
-
-                    <!-- 逐批次还原（需求 2.1 / 3.4-6）：HC 3.5.1 没有 ItemsControl 皮肤，用 WPF 原生 ItemsControl + HC 令牌样式 -->
-                    <ItemsControl Name="QuarantineBatchList" Margin="0,8,0,0" ItemsSource="{Binding QuarantineBatches, Mode=OneWay}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Margin="0,4,0,0">
+                                <Grid Margin="0,14,0,0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Style="{StaticResource SmTextBody}" Text="{Binding SummaryText, Mode=OneWay}" />
-                                        <TextBlock Style="{StaticResource SmTextDanger}" Text="{Binding ExpiredText, Mode=OneWay}"
-                                                   Visibility="{Binding IsExpired, Converter={StaticResource BoolToVisibility}}" />
-                                        <TextBlock Style="{StaticResource SmTextCaption}" Text="{Binding StatusText, Mode=OneWay}" />
-                                    </StackPanel>
-                                    <Button Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center"
-                                            Content="还原此批次…" Command="{Binding RestoreCommand}" />
+                                    <hc:TextBox Grid.Column="0" Name="QuarantinePathBox" IsReadOnly="True"
+                                                Text="{Binding QuarantineBasePath, Mode=OneWay}" />
+                                    <Button Grid.Column="1" Name="PickFolderButton" Margin="8,0,0,0"
+                                            Style="{StaticResource SmButtonSecondary}"
+                                            Command="{Binding PickQuarantineFolderCommand}" Content="选择文件夹…" />
                                 </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
 
-                    <TextBlock Margin="0,8,0,0" Style="{StaticResource SmTextCaption}"
-                               Text="当前隔离区里没有批次。" Visibility="{Binding HasQuarantineBatches, Converter={StaticResource InverseBoolToVisibility}}" />
+                                <TextBlock Margin="0,14,0,0" Style="{StaticResource SmTextLabel}" Text="实际存放位置" />
+                                <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextMeta}"
+                                           Text="{Binding QuarantineStoragePath, Mode=OneWay}"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
+                                           Text="（本工具只在该目录下建自己的子目录，不污染你的目录结构）" />
 
-                    <TextBlock Margin="0,16,0,0" Style="{StaticResource SmTextCaption}"
-                               Text="隔离区当前占用（下次启动会惰性释放到期批次）" />
-                    <TextBlock Style="{StaticResource SmTextBody}" Text="{Binding QuarantineUsageText, Mode=OneWay}" />
-                </StackPanel>
+                                <Border Margin="0,14,0,0" Style="{StaticResource SmPanel}">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Border Style="{StaticResource SmChip}" Padding="7,2">
+                                                <TextBlock Style="{StaticResource SmTextMeta}" FontWeight="SemiBold"
+                                                           Text="{Binding ValidationLevelText, Mode=OneWay}" />
+                                            </Border>
+                                            <TextBlock Margin="8,0,0,0" VerticalAlignment="Center"
+                                                       Style="{StaticResource SmTextBody}"
+                                                       Text="{Binding ValidationMessage, Mode=OneWay}" />
+                                        </StackPanel>
+                                        <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextCaption}"
+                                                   Text="{Binding ValidationDetail, Mode=OneWay}" />
+                                        <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextDanger}"
+                                                   Text="当前位置不可用，保存已被拒绝。请换一个本地固定磁盘上的普通文件夹。"
+                                                   Visibility="{Binding IsRejected, Converter={StaticResource BoolToVisibility}}" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </hc:Card>
+
+                        <!-- 批次列表 -->
+                        <hc:Card Style="{StaticResource SmCard}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource SmIconSm}" Data="{StaticResource SmIconHistory}" />
+                                    <TextBlock Margin="8,0,0,0" Style="{StaticResource SmTextSection}"
+                                               Text="隔离区里的批次" />
+                                </StackPanel>
+                                <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextCaption}"
+                                           Text="还原会把该批次的文件搬回原来的位置；原位置已有同名文件的会被跳过，不会被覆盖。" />
+
+                                <ItemsControl Name="QuarantineBatchList" Margin="0,8,0,0"
+                                              ItemsSource="{Binding QuarantineBatches, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Style="{StaticResource SmRow}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0">
+                                                        <TextBlock Style="{StaticResource SmTextBody}"
+                                                                   Text="{Binding SummaryText, Mode=OneWay}" />
+                                                        <TextBlock Style="{StaticResource SmTextDanger}"
+                                                                   Text="{Binding ExpiredText, Mode=OneWay}"
+                                                                   Visibility="{Binding IsExpired, Converter={StaticResource BoolToVisibility}}" />
+                                                        <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
+                                                                   Text="{Binding StatusText, Mode=OneWay}" />
+                                                    </StackPanel>
+                                                    <Button Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center"
+                                                            Style="{StaticResource SmButtonSecondary}"
+                                                            Content="还原此批次…" Command="{Binding RestoreCommand}" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock Margin="0,8,0,0" Style="{StaticResource SmTextCaption}"
+                                           Text="当前隔离区里没有批次。"
+                                           Visibility="{Binding HasQuarantineBatches, Converter={StaticResource InverseBoolToVisibility}}" />
+
+                                <Border Margin="0,12,0,0" Style="{StaticResource SmSeparator}" />
+
+                                <TextBlock Style="{StaticResource SmTextLabel}" Text="隔离区当前占用" />
+                                <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextBody}"
+                                           Text="{Binding QuarantineUsageText, Mode=OneWay}" />
+                                <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
+                                           Text="到期批次会在下一次启动时惰性释放（本工具没有常驻进程，不做后台任务）。" />
+                            </StackPanel>
+                        </hc:Card>
+                    </StackPanel>
+                </ScrollViewer>
             </hc:TabItem>
 
-            <!-- ── 保留期与回收站范围 ── -->
             <hc:TabItem Header="保留期与范围">
-                <StackPanel Margin="16">
-                    <TextBlock Style="{StaticResource SmTextSection}" Text="隔离区保留天数" />
-                    <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
-                               Text="默认 7 天（1–365）。保留期内文件都可以还原；到期后在下一次启动时自动释放。" />
-                    <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                        <hc:NumericUpDown Name="RetentionDaysBox" Width="180"
-                                          Minimum="1" Maximum="365" Increment="1"
-                                          Value="{Binding RetentionDays, Mode=TwoWay}" />
-                        <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" Style="{StaticResource SmTextCaption}"
-                                   Text="{Binding RetentionText, Mode=OneWay}" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="2,16,2,16">
+                    <StackPanel>
+                        <hc:Card Style="{StaticResource SmCard}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SmTextSection}" Text="隔离区保留天数" />
+                                <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextCaption}"
+                                           Text="默认 7 天（1–365）。保留期内文件都可以还原；到期后在下一次启动时自动释放。" />
+                                <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                                    <hc:NumericUpDown Name="RetentionDaysBox" Width="180"
+                                                      Minimum="1" Maximum="365" Increment="1"
+                                                      Value="{Binding RetentionDays, Mode=TwoWay}" />
+                                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center"
+                                               Style="{StaticResource SmTextBody}"
+                                               Text="{Binding RetentionText, Mode=OneWay}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </hc:Card>
+
+                        <hc:Card Style="{StaticResource SmCard}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SmTextSection}" Text="回收站范围" />
+                                <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                                    <!-- HC 3.5.1 没有独立 Switch 控件，用 hc:ToggleBlock（同一套皮肤语义） -->
+                                    <hc:ToggleBlock Name="OtherDriveRecycleBinSwitch" Width="58"
+                                                    IsChecked="{Binding IncludeOtherDriveRecycleBin, Mode=TwoWay}" />
+                                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center"
+                                               Style="{StaticResource SmTextBody}"
+                                               Text="把非系统盘的回收站也纳入清单（默认关闭）" />
+                                </StackPanel>
+                                <TextBlock Margin="0,8,0,0" Style="{StaticResource SmTextCaption}"
+                                           Text="{Binding RecycleBinScopeText, Mode=OneWay}" />
+                            </StackPanel>
+                        </hc:Card>
+
+                        <hc:Card Style="{StaticResource SmCard}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SmTextSection}" Text="立即清空隔离区" />
+                                <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextCaption}"
+                                           Text="清空后隔离区里的文件会被彻底删除，不再有保留期保护，也无法还原。执行前会再确认一次。" />
+                                <Button Name="ClearQuarantineButton" Margin="0,12,0,0" HorizontalAlignment="Left"
+                                        Style="{StaticResource SmButtonDanger}"
+                                        Command="{Binding ClearQuarantineCommand}" Content="立即清空隔离区…" />
+                            </StackPanel>
+                        </hc:Card>
                     </StackPanel>
-
-                    <hc:Divider Margin="0,18,0,12" />
-
-                    <TextBlock Style="{StaticResource SmTextSection}" Text="回收站范围" />
-                    <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                        <!-- HandyControl 3.5.1 没有独立 Switch 控件，用 hc:ToggleBlock（同一套皮肤语义） -->
-                        <hc:ToggleBlock Name="OtherDriveRecycleBinSwitch" Width="58"
-                                        IsChecked="{Binding IncludeOtherDriveRecycleBin, Mode=TwoWay}" />
-                        <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" Style="{StaticResource SmTextBody}"
-                                   Text="把非系统盘的回收站也纳入清单（默认关闭）" />
-                    </StackPanel>
-                    <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextCaption}"
-                               Text="{Binding RecycleBinScopeText, Mode=OneWay}" />
-
-                    <hc:Divider Margin="0,18,0,12" />
-
-                    <TextBlock Style="{StaticResource SmTextSection}" Text="立即清空隔离区" />
-                    <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
-                               Text="清空后隔离区里的文件会被彻底删除，不再有保留期保护，也无法还原。执行前会再确认一次。" />
-                    <Button Name="ClearQuarantineButton" Margin="0,10,0,0" HorizontalAlignment="Left"
-                            Command="{Binding ClearQuarantineCommand}" Content="立即清空隔离区…" />
-                </StackPanel>
+                </ScrollViewer>
             </hc:TabItem>
 
-            <!-- ── 报告与日志 ── -->
             <hc:TabItem Header="报告与日志">
-                <StackPanel Margin="16">
-                    <TextBlock Style="{StaticResource SmTextSection}" Text="清单与复核报告目录" />
-                    <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextBody}"
-                               Text="{Binding ReportDirectory, Mode=OneWay}" />
-                    <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
-                               Text="每次导出清单会在该目录下建立时间戳子目录（清单.md + 清单.csv），复核报告写在同一目录。" />
-                    <Button Margin="0,8,0,0" HorizontalAlignment="Left"
-                            Command="{Binding OpenReportDirectoryCommand}" Content="打开报告目录" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="2,16,2,16">
+                    <StackPanel>
+                        <hc:Card Style="{StaticResource SmCard}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource SmIconSm}" Data="{StaticResource SmIconDoc}" />
+                                    <TextBlock Margin="8,0,0,0" Style="{StaticResource SmTextSection}"
+                                               Text="清单与复核报告目录" />
+                                </StackPanel>
+                                <TextBlock Margin="0,8,0,0" Style="{StaticResource SmTextMeta}"
+                                           Text="{Binding ReportDirectory, Mode=OneWay}"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
+                                           Text="每次导出清单会在该目录下建立时间戳子目录（清单.md + 清单.csv），复核报告写在同一目录。" />
+                                <Button Margin="0,12,0,0" HorizontalAlignment="Left"
+                                        Style="{StaticResource SmButtonGhost}"
+                                        Command="{Binding OpenReportDirectoryCommand}" Content="打开报告目录" />
+                            </StackPanel>
+                        </hc:Card>
 
-                    <hc:Divider Margin="0,18,0,12" />
-
-                    <TextBlock Style="{StaticResource SmTextSection}" Text="日志目录" />
-                    <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextBody}"
-                               Text="{Binding LogDirectory, Mode=OneWay}" />
-                    <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
-                               Text="全程记录扫描、清理、跳过、还原与异常；启动时惰性清理 30 天前的日志。" />
-                    <Button Margin="0,8,0,0" HorizontalAlignment="Left"
-                            Command="{Binding OpenLogDirectoryCommand}" Content="打开日志目录" />
-                </StackPanel>
+                        <hc:Card Style="{StaticResource SmCard}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource SmIconSm}" Data="{StaticResource SmIconDoc}" />
+                                    <TextBlock Margin="8,0,0,0" Style="{StaticResource SmTextSection}" Text="日志目录" />
+                                </StackPanel>
+                                <TextBlock Margin="0,8,0,0" Style="{StaticResource SmTextMeta}"
+                                           Text="{Binding LogDirectory, Mode=OneWay}"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
+                                           Text="全程记录扫描、清理、跳过、还原与异常；启动时惰性清理 30 天前的日志。" />
+                                <Button Margin="0,12,0,0" HorizontalAlignment="Left"
+                                        Style="{StaticResource SmButtonGhost}"
+                                        Command="{Binding OpenLogDirectoryCommand}" Content="打开日志目录" />
+                            </StackPanel>
+                        </hc:Card>
+                    </StackPanel>
+                </ScrollViewer>
             </hc:TabItem>
         </hc:TabControl>
-    </DockPanel>
+
+        <!-- 页脚操作条 -->
+        <Border Grid.Row="2" Padding="20,12" Background="{DynamicResource SecondaryRegionBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SmTextCaption}"
+                           Text="保存后立即生效；隔离区位置改动不会搬运已有文件。" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Name="SaveSettingsButton" Style="{StaticResource SmButtonPrimary}"
+                            Command="{Binding SaveCommand}" Content="保存设置" />
+                    <Button Name="CloseSettingsButton" Margin="8,0,0,0" Style="{StaticResource SmButtonSecondary}"
+                            Click="OnCloseClick" Content="关闭" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
 </Window>

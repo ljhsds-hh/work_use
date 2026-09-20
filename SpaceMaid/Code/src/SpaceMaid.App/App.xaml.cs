@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using SpaceMaid.App.Services;
 using SpaceMaid.App.ViewModels;
@@ -61,11 +62,18 @@ public partial class App : Application
 
             var viewModel = new MainViewModel(bridge, scanner, executor, dialogs, folderPicker, notifications, shell);
 
-            // ③ 启动自检必须在窗口出现之前跑完（"到期释放"没有常驻进程，只能在这里做）
-            var preparation = viewModel.Initialize();
-
+            // ③-a 先把主窗建出来并登记为 Application.MainWindow，**再**跑启动自检。
+            //
+            // 顺序不是随手写的：自检里可能弹"权限不足"对话框（需求 3.6-2），而 WPF 会把
+            // **第一个显示出来的窗口**记为 Application.MainWindow；配合 ShutdownMode.OnMainWindowClose，
+            // 那个对话框一被点掉，整个应用就跟着退出了——真机现象是"未提权启动 → 点掉提示 → 程序直接消失，
+            // 主界面压根没出现"。先登记主窗，对话框就抢不走这个身份。
             var window = new MainWindow(viewModel, folderPicker, dialogs, notifications, shell);
             MainWindow = window;
+
+            // ③-b 启动自检必须在窗口出现之前跑完（"到期释放"没有常驻进程，只能在这里做）
+            var preparation = viewModel.Initialize();
+
             window.Show();
 
             if (!preparation.QuarantineUsable)
@@ -75,13 +83,65 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            // 启动失败也必须给用户一句人话，并如实说明"没有执行任何清理"
+            // 启动失败也必须给用户一句人话，并如实说明"没有执行任何清理"。
+            // 但**光有一句人话不够**：XAML 解析失败的真实原因（缺哪个资源键、哪个文件哪一行）
+            // 全在内部异常里，只显示 ex.Message 等于让人无从下手——把完整异常链写进日志，
+            // 并且额外落一份 D:\logs\SpaceMaid\startup-failure.log（日志本身不可用时也留得下证据）。
+            var report = DescribeException(ex);
+            TryWriteStartupFailure(report);
+
             MessageBox.Show(
-                $"SpaceMaid 启动失败：{ex.Message}{Environment.NewLine}{Environment.NewLine}本次没有执行任何清理或删除动作。",
+                $"SpaceMaid 启动失败：{ex.Message}{Environment.NewLine}{Environment.NewLine}本次没有执行任何清理或删除动作。"
+                + $"{Environment.NewLine}{Environment.NewLine}详细原因（含内部异常）已写入：{StartupFailurePath}",
                 "SpaceMaid 启动失败",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(1);
+        }
+    }
+
+    /// <summary>启动失败证据的落盘位置（用户报问题时让它直接给这个文件）。</summary>
+    private static string StartupFailurePath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "logs", "SpaceMaid", "startup-failure.log");
+
+    private static string DescribeException(Exception ex)
+    {
+        var builder = new System.Text.StringBuilder();
+        builder.AppendLine($"时间：{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}");
+        builder.AppendLine($"命令行：{string.Join(' ', Environment.GetCommandLineArgs())}");
+        builder.AppendLine();
+
+        var current = ex;
+        var depth = 0;
+        while (current is not null)
+        {
+            builder.AppendLine($"[{depth}] {current.GetType().FullName}: {current.Message}");
+            if (current is System.Windows.Markup.XamlParseException markup)
+            {
+                builder.AppendLine($"    BaseUri={markup.BaseUri}");
+                builder.AppendLine($"    LineNumber={markup.LineNumber} LinePosition={markup.LinePosition}");
+            }
+
+            builder.AppendLine(current.StackTrace);
+            builder.AppendLine();
+            current = current.InnerException;
+            depth++;
+        }
+
+        return builder.ToString();
+    }
+
+    private static void TryWriteStartupFailure(string report)
+    {
+        try
+        {
+            var path = StartupFailurePath;
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.AppendAllText(path, report + new string('-', 80) + Environment.NewLine, System.Text.Encoding.UTF8);
+        }
+        catch (Exception)
+        {
+            // 连日志都写不了就只剩弹窗了——不能因为记录失败再抛一次
         }
     }
 

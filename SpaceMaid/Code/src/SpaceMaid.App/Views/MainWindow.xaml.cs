@@ -36,6 +36,14 @@ public partial class MainWindow : System.Windows.Window
 
         // Growl 轻提示：token + 面板必须成对注册（HandyControl 的约定，参数顺序是 token 在前）
         Growl.Register(NotificationToken, GrowlPanel);
+
+        // 订阅"打开设置"请求。
+        //
+        // 这一行曾经**漏掉过**：ViewModel 里 `RequestOpenSettings` 事件、`OpenSettingsCommand`、
+        // 导航项的 "settings" 分支都齐了，只是没人订阅——结果「设置」按钮和左侧导航项点下去毫无反应，
+        // 隔离区位置、保留期、清空隔离区、报告/日志目录这些设置全部进不去（界面看不出异常，因为按钮样式正常）。
+        // 现在由 `StaticSafetyTests.App_should_wire_settings_request_from_viewmodel` 守着这对 +=/-= 必须成对存在。
+        ViewModel.RequestOpenSettings += ShowSettings;
     }
 
     /// <summary>Growl token（与 App 里的 <c>GrowlNotificationService</c> 必须一致）。</summary>

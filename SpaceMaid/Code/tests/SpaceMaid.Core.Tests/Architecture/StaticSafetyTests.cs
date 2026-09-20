@@ -345,24 +345,32 @@ public class StaticSafetyTests
     ///
     /// 为什么把这条从"人工看一遍"变成自动断言：界面的手写十六进制色值是最容易在评审里溜过去的一类问题——
     /// 看图看不出 `#FF5722` 和 `DangerBrush` 的差别，但深色皮肤一切换就露馅，而且它会绕开主题。
-    /// 读的是 `.xaml` 文本，所以 `#[0-9A-Fa-f]{3,8}` 与 `Color=` / `<SolidColorBrush>` 三种写法都拦得住。
+    ///
+    /// 判定细节（两处都踩过坑，别改回去）：
+    /// ① **先剥掉 XML 注释**：注释里为了讲道理会写出"不许写 Color= / SolidColorBrush"这类字样，
+    ///    按原文扫描会把说明文字当成违规；断言的对象应该是真正的标记语言，不是文档。
+    /// ② `Color=` 只在**字面量**上违规：`Color="{DynamicResource X}"` 是引用令牌，属于正确写法。
     /// </summary>
     [Fact]
     public void App_xaml_should_not_hardcode_colors()
     {
-        var colorPattern = new Regex(@"#[0-9A-Fa-f]{3,8}\b");
+        var commentPattern = new Regex("<!--.*?-->", RegexOptions.Singleline);
+        var hexPattern = new Regex(@"#[0-9A-Fa-f]{3,8}\b");
+        var literalColorPattern = new Regex("Color\\s*=\\s*\"(?!\\s*\\{(Dynamic|Static)Resource)[^\"]*\"");
         var offenders = new List<string>();
 
-        foreach (var (file, text) in ReadAppXaml())
+        foreach (var (file, raw) in ReadAppXaml())
         {
-            foreach (Match match in colorPattern.Matches(text))
+            var text = commentPattern.Replace(raw, string.Empty);
+
+            foreach (Match match in hexPattern.Matches(text))
             {
                 offenders.Add($"{file}: {match.Value}");
             }
 
-            if (text.Contains("Color=", StringComparison.Ordinal))
+            foreach (Match match in literalColorPattern.Matches(text))
             {
-                offenders.Add($"{file}: 出现 Color= 直接定义色值");
+                offenders.Add($"{file}: {match.Value.Trim()}");
             }
 
             if (text.Contains("SolidColorBrush", StringComparison.Ordinal))
@@ -375,6 +383,55 @@ public class StaticSafetyTests
             "界面 XAML 不得硬编码颜色（应使用 HandyControl 皮肤的动态资源或 DesignTokens 令牌）：" + string.Join("；", offenders));
     }
 
+    /// <summary>
+    /// 设计令牌字典：**键不得重复**，且界面里引用的**自有令牌（Sm\*）必须真的存在**。
+    ///
+    /// 为什么值得两条静态用例：这两类错误在编译期都发现不了——
+    /// 重复键会让 WPF 在**运行期**抛 "Item has already been added. Key in dictionary: 'X'"
+    /// （整个界面直接启动失败）；引用不存在的 `Sm*` 键则会抛"找不到名为 X 的资源"。
+    /// 两者都是"改一行 XAML 就炸，但不跑起来完全看不出来"，正适合用文本级断言守着。
+    /// （`DynamicResource` 更阴——找不到只是静默变 null，所以这条同时把 Dynamic 引用也查了。）
+    /// </summary>
+    [Fact]
+    public void Design_tokens_should_be_unique_and_referenced_keys_should_exist()
+    {
+        var (tokenFile, tokenText) = ReadAppXaml().Single(x => x.File.EndsWith("DesignTokens.xaml", StringComparison.OrdinalIgnoreCase));
+
+        var defined = new Regex("x:Key=\"([^\"]+)\"")
+            .Matches(tokenText)
+            .Select(m => m.Groups[1].Value)
+            .ToList();
+
+        var duplicates = defined
+            .GroupBy(k => k, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .Select(g => $"{g.Key}×{g.Count()}")
+            .ToList();
+
+        Assert.True(duplicates.Count == 0,
+            $"{tokenFile} 里有重复的资源键（运行期会直接抛异常）：{string.Join('、', duplicates)}");
+
+        var definedSet = new HashSet<string>(defined, StringComparer.Ordinal);
+        var missing = new List<string>();
+
+        foreach (var (file, raw) in ReadAppXaml())
+        {
+            var text = new Regex("<!--.*?-->", RegexOptions.Singleline).Replace(raw, string.Empty);
+
+            foreach (Match match in new Regex(@"\{(?:Dynamic|Static)Resource\s+(Sm[A-Za-z0-9]+)\}").Matches(text))
+            {
+                var key = match.Groups[1].Value;
+                if (!definedSet.Contains(key))
+                {
+                    missing.Add($"{file}: {key}");
+                }
+            }
+        }
+
+        Assert.True(missing.Count == 0,
+            $"{tokenFile} 里没有定义这些被界面引用的令牌（运行期会报「找不到资源」，DynamicResource 则静默失效）：{string.Join('、', missing.Distinct())}");
+    }
+
     private static IReadOnlyList<(string File, string Text)> ReadAppXaml() =>
         Directory
             .EnumerateFiles(AppSourceRoot, "*.xaml", SearchOption.AllDirectories)
@@ -382,4 +439,60 @@ public class StaticSafetyTests
                            && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
             .Select(path => (Path.GetRelativePath(AppSourceRoot, path), File.ReadAllText(path)))
             .ToList();
+
+    /// <summary>
+    /// 启动顺序不变量：**主窗必须先登记为 <c>Application.MainWindow</c>，再跑启动自检**。
+    ///
+    /// 为什么值得用一条静态用例守着：启动自检里会弹"权限不足"对话框（需求 3.6-2），
+    /// 而 WPF 把"第一个显示出来的窗口"记为 <c>Application.MainWindow</c>；配合
+    /// <c>ShutdownMode.OnMainWindowClose</c>，那个对话框一关就把整个应用关掉了。
+    /// 真机表现是"未提权启动 → 点掉提示 → 程序直接消失"，而且**两只眼睛很难看出来是顺序问题**。
+    /// 这条用例读 App.xaml.cs 的源码文本，断言两件事的相对顺序。
+    /// </summary>
+    [Fact]
+    public void App_should_register_main_window_before_running_startup_checks()
+    {
+        var (file, text) = ReadAppSource("App.xaml.cs");
+        var assignIndex = text.IndexOf("MainWindow = window;", StringComparison.Ordinal);
+        var initializeIndex = text.IndexOf("viewModel.Initialize()", StringComparison.Ordinal);
+
+        Assert.True(assignIndex >= 0, $"{file} 里找不到 `MainWindow = window;`");
+        Assert.True(initializeIndex >= 0, $"{file} 里找不到 `viewModel.Initialize()`");
+        Assert.True(assignIndex < initializeIndex,
+            $"{file}: `MainWindow = window;` 必须出现在 `viewModel.Initialize()` 之前——"
+            + "否则启动自检里弹出的对话框会被 WPF 记成 Application.MainWindow，"
+            + "配合 ShutdownMode.OnMainWindowClose 会让应用在用户点掉提示后直接退出。");
+    }
+
+    private static (string File, string Text) ReadAppSource(string fileName)
+    {
+        var path = Directory
+            .EnumerateFiles(AppSourceRoot, fileName, SearchOption.AllDirectories)
+            .FirstOrDefault(p => !p.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+                                 && !p.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase));
+
+        Assert.False(path is null, $"找不到界面源码 {fileName}");
+        return (Path.GetRelativePath(AppSourceRoot, path!), File.ReadAllText(path!));
+    }
+
+    /// <summary>
+    /// "打开设置"这条链路必须有人订阅。
+    ///
+    /// 真实踩过的坑：ViewModel 侧的 `RequestOpenSettings` 事件、`OpenSettingsCommand`、
+    /// 导航项的 "settings" 分支都在，**但主窗从来没订阅过这个事件**——于是「设置」按钮点下去毫无反应，
+    /// 隔离区位置/保留期/清空隔离区/报告日志目录全部进不去，而界面上看不出任何异常。
+    /// 这类"接线漏了"的错误只有把界面真跑起来点一下才看得见，所以在这里立一条可静态检查的规矩。
+    /// </summary>
+    [Fact]
+    public void App_should_wire_settings_request_from_viewmodel()
+    {
+        var (file, text) = ReadAppSource("MainWindow.xaml.cs");
+
+        Assert.Contains("RequestOpenSettings += ShowSettings", text, StringComparison.Ordinal);
+        Assert.Contains("RequestOpenSettings -= ShowSettings", text, StringComparison.Ordinal);
+        Assert.True(
+            text.IndexOf("RequestOpenSettings += ShowSettings", StringComparison.Ordinal)
+            < text.IndexOf("RequestOpenSettings -= ShowSettings", StringComparison.Ordinal),
+            $"{file}: 订阅必须出现在退订之前（构造函数里订阅、OnClosing 里退订）");
+    }
 }

@@ -30,6 +30,14 @@ public sealed class QuarantineBatchViewModel : ViewModelBase
 
     public Action<RestoreResult>? OnRestored { get; }
 
+    /// <summary>
+    /// 可选的二次确认。返回 false 时**一个文件都不动**，状态文案写"已取消"。
+    ///
+    /// 为什么做成可选：设置窗口在调用前已经自己确认过一次（它要按批次拼更长的文案），
+    /// 主窗的隔离区页则需要自己弹确认——两处共用同一个视图模型，但确认的归属方不同。
+    /// </summary>
+    public Func<bool>? Confirm { get; init; }
+
     public string BatchId => Batch.BatchId;
 
     public RelayCommand RestoreCommand { get; }
@@ -54,6 +62,12 @@ public sealed class QuarantineBatchViewModel : ViewModelBase
     /// <summary>执行还原并返回结果；界面在调用前必须先完成二次确认。</summary>
     public RestoreResult Restore()
     {
+        if (Confirm is not null && !Confirm())
+        {
+            StatusText = "已取消，隔离区未做任何改动。";
+            return new RestoreResult(0, 0, Array.Empty<RestoreConflict>(), Array.Empty<RestoreFailure>());
+        }
+
         var result = _restore(BatchId);
 
         var parts = new List<string> { $"已还原 {result.RestoredCount} 个文件（{VolumeTextFormatter.FormatBytes(result.RestoredBytes)}）" };

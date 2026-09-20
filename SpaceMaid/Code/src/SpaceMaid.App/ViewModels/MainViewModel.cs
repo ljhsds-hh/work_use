@@ -10,6 +10,17 @@ using SpaceMaid.Core.Reporting;
 namespace SpaceMaid.App.ViewModels;
 
 /// <summary>
+/// 主窗的三个页面。纯界面状态：它不参与任何清理决策，也不进设置文件
+/// （每次启动都回到"磁盘概览"，避免上次停在隔离区页就成了隐性状态）。
+/// </summary>
+public enum MainPage
+{
+    Overview,
+    Clean,
+    Quarantine
+}
+
+/// <summary>
 /// 主界面 ViewModel（三段式：磁盘总览 / 分级清单 / 操作栏）。
 ///
 /// 它刻意**不认识任何 WPF 控件**，也从不自己弹窗：对话框、文件夹选择、Growl、打开目录全部走接口，
@@ -59,6 +70,10 @@ public sealed class MainViewModel : ViewModelBase
     private string _reviewReportPath = string.Empty;
     private string _manifestDirectory = string.Empty;
     private CleanCategory _selectedCategory = CleanCategory.L1OneClick;
+    private MainPage _activePage = MainPage.Overview;
+    private string _quarantineUsageText = "尚未读取";
+    private string _quarantineCountText = string.Empty;
+    private string _quarantineExpiredText = string.Empty;
 
     public MainViewModel(
         ICoreBridge bridge,
@@ -87,6 +102,163 @@ public sealed class MainViewModel : ViewModelBase
         OpenReportDirectoryCommand = new RelayCommand(() => _shell.OpenDirectory(ReportRoot));
         SelectCategoryCommand = new RelayCommand<CleanCategory>(category => SelectedCategory = category);
         ToggleAllCurrentCategoryCommand = new RelayCommand(ToggleAllCurrentCategory);
+        OpenCategoryCommand = new RelayCommand<CleanCategory>(OpenCategory);
+        ToggleCategoryAllCommand = new RelayCommand<CleanCategory>(category =>
+        {
+            SelectedCategory = category;
+            ToggleAllCurrentCategory();
+        });
+        NavigateCommand = new RelayCommand<string>(Navigate);
+        RefreshQuarantineCommand = new RelayCommand(RefreshQuarantine);
+    }
+
+    // ── 左侧导航（纯界面状态；不参与任何清理决策，也不记忆到设置里）──
+
+    /// <summary>导航到某一页；参数 "settings" 是"打开设置窗口"而不是切页。</summary>
+    public void Navigate(string? page)
+    {
+        switch (page)
+        {
+            case "overview":
+                ActivePage = MainPage.Overview;
+                break;
+            case "clean":
+                ActivePage = MainPage.Clean;
+                break;
+            case "quarantine":
+                ActivePage = MainPage.Quarantine;
+                RefreshQuarantine();
+                break;
+            case "settings":
+                RequestOpenSettings?.Invoke();
+                break;
+        }
+    }
+
+    public MainPage ActivePage
+    {
+        get => _activePage;
+        set
+        {
+            if (_activePage == value)
+            {
+                return;
+            }
+
+            _activePage = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsOverviewActive));
+            OnPropertyChanged(nameof(IsCleanActive));
+            OnPropertyChanged(nameof(IsQuarantineActive));
+            OnPropertyChanged(nameof(ActivePageTitle));
+            OnPropertyChanged(nameof(ActivePageSubtitle));
+        }
+    }
+
+    // 三个 RadioButton 的选中态：只在"被选中"时导航（取消选中由同组其它项触发，不需要响应）
+    public bool IsOverviewActive
+    {
+        get => ActivePage == MainPage.Overview;
+        set { if (value) { ActivePage = MainPage.Overview; } }
+    }
+
+    public bool IsCleanActive
+    {
+        get => ActivePage == MainPage.Clean;
+        set { if (value) { ActivePage = MainPage.Clean; } }
+    }
+
+    public bool IsQuarantineActive
+    {
+        get => ActivePage == MainPage.Quarantine;
+        set { if (value) { ActivePage = MainPage.Quarantine; RefreshQuarantine(); } }
+    }
+
+    public string ActivePageTitle => ActivePage switch
+    {
+        MainPage.Clean => "清理计划",
+        MainPage.Quarantine => "隔离区",
+        _ => "磁盘概览"
+    };
+
+    public string ActivePageSubtitle => ActivePage switch
+    {
+        MainPage.Clean => "按分级审阅清理项；导出清单与执行是两步，导出不会动任何文件",
+        MainPage.Quarantine => "所有被清理的文件都先放在这里，保留期内可以还原",
+        _ => "先盘点、再决定；扫描只读，清理前一定先看清单"
+    };
+
+    // ── 隔离区页（需求 2.1 / 3.4-6：逐批次还原）──
+
+    public ObservableCollection<QuarantineBatchViewModel> QuarantineBatches { get; } = new();
+
+    public bool HasQuarantineBatches => QuarantineBatches.Count > 0;
+
+    public string QuarantineUsageText
+    {
+        get => _quarantineUsageText;
+        private set => SetProperty(ref _quarantineUsageText, value);
+    }
+
+    public string QuarantineCountText
+    {
+        get => _quarantineCountText;
+        private set => SetProperty(ref _quarantineCountText, value);
+    }
+
+    public string QuarantineExpiredText
+    {
+        get => _quarantineExpiredText;
+        private set => SetProperty(ref _quarantineExpiredText, value);
+    }
+
+    /// <summary>
+    /// 重新读取隔离区现状并重建批次列表。**只读操作**：只调 <c>InspectQuarantine</c>，
+    /// 不触发到期释放、不删任何东西——释放只发生在启动与扫描前（需求 3.4-5 的惰性语义）。
+    /// 读不到（隔离区不可用）时把原因写进文案，不抛异常打断界面。
+    /// </summary>
+    public void RefreshQuarantine()
+    {
+        try
+        {
+            var info = _bridge.InspectQuarantine();
+
+            QuarantineUsageText = $"{VolumeTextFormatter.FormatBytes(info.TotalBytes)}（{info.Batches.Count} 个批次）";
+            QuarantineCountText = info.Batches.Count == 0 ? "隔离区是空的" : $"{info.Batches.Count} 个批次";
+            QuarantineExpiredText = info.ExpiredBatchCount > 0
+                ? $"其中 {info.ExpiredBatchCount} 个已到期，可在设置里立即清空"
+                : "没有已到期的批次";
+
+            QuarantineBatches.Clear();
+            foreach (var batch in info.Batches.OrderByDescending(b => b.CreatedAt))
+            {
+                QuarantineBatches.Add(new QuarantineBatchViewModel(
+                    batch,
+                    id => _bridge.RestoreBatch(id),
+                    _ => RefreshQuarantine())
+                {
+                    // 还原会把文件搬回原位，属于"改状态"的动作，点之前先让用户确认一次
+                    Confirm = () => _dialogs.Confirm(
+                        $"将把这个批次里的 {batch.EntryCount} 个文件"
+                        + $"（{VolumeTextFormatter.FormatBytes(batch.TotalBytes)}）搬回它们原来的位置。"
+                        + (batch.Expired ? Environment.NewLine + Environment.NewLine + "注意：该批次保留期已过，随时可能被自动释放。" : string.Empty)
+                        + Environment.NewLine + Environment.NewLine
+                        + "如果原位置已有同名文件，那个文件会被跳过、不会被覆盖。确定要还原吗？",
+                        "还原隔离批次")
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            QuarantineUsageText = "隔离区当前不可读取";
+            QuarantineCountText = ex.Message;
+            QuarantineExpiredText = string.Empty;
+            QuarantineBatches.Clear();
+        }
+        finally
+        {
+            OnPropertyChanged(nameof(HasQuarantineBatches));
+        }
     }
 
     /// <summary>请求打开设置窗口（由 View 订阅，ViewModel 不 new 窗口）。</summary>
@@ -117,6 +289,30 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand SelectCategoryCommand { get; }
 
     public ICommand ToggleAllCurrentCategoryCommand { get; }
+
+    /// <summary>左侧导航：参数 "overview" / "clean" / "quarantine" / "settings"。</summary>
+    public ICommand NavigateCommand { get; }
+
+    /// <summary>概览页的"查看该分级"：选中分级并切到清理计划页。</summary>
+    public ICommand OpenCategoryCommand { get; }
+
+    /// <summary>分级卡片/分组头里的"本分级全选/反选"：先选中该分级再切换勾选。</summary>
+    public ICommand ToggleCategoryAllCommand { get; }
+
+    /// <summary>隔离区页：重新读取现状与批次列表（只读）。</summary>
+    public ICommand RefreshQuarantineCommand { get; }
+
+    /// <summary>
+    /// "一键清理（L1）"是否可点：不等于 <see cref="CanExecuteClean"/>——L1 没有勾选框，
+    /// 所以不能用"已勾选 N 项"当门槛，只用"不忙 + 未被提权闸门挡住"。
+    /// </summary>
+    public bool CanOneClickClean => !IsBusy && !IsFlowBlocked;
+
+    private void OpenCategory(CleanCategory category)
+    {
+        SelectedCategory = category;
+        ActivePage = MainPage.Clean;
+    }
 
     // ── ① 顶部：磁盘总览 ──
 
@@ -238,6 +434,7 @@ public sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(CanStartScan));
                 OnPropertyChanged(nameof(CanExecuteClean));
                 OnPropertyChanged(nameof(CanExportManifest));
+                OnPropertyChanged(nameof(CanOneClickClean));
             }
         }
     }
@@ -430,6 +627,7 @@ public sealed class MainViewModel : ViewModelBase
         if (!IsElevated)
         {
             IsFlowBlocked = true;
+            OnPropertyChanged(nameof(CanOneClickClean));
             BlockReason = "当前进程不具备管理员权限，已阻止进入清理流程。请通过 SpaceMaid.exe 启动（清单已固定要求管理员权限）。";
             _dialogs.Warn(BlockReason, "权限不足");
         }
@@ -469,6 +667,10 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(QuarantineRoot));
         OnPropertyChanged(nameof(ReportRoot));
         OnPropertyChanged(nameof(SameVolumeNotice));
+
+        // 概览页要显示隔离区占用，启动时就先读一次（只读，不会触发任何释放/删除）
+        RefreshQuarantine();
+
         return preparation;
     }
 
@@ -1138,6 +1340,32 @@ public sealed class CleanSectionViewModel : ViewModelBase
 
     public string Title => MainViewModel.CategoryText(Category);
 
+    /// <summary>
+    /// 分级徽标文字（L1 / L2 / L3 / 回收站）。做成两三个字的短标签，是因为它要放进状态色标里，
+    /// 而色标是"扫一眼"的东西——"L1 一键直清"塞进去会把色标撑成一条。
+    /// </summary>
+    public string Badge => Category switch
+    {
+        CleanCategory.L1OneClick => "L1",
+        CleanCategory.L2Recommended => "L2",
+        CleanCategory.L3Cautious => "L3",
+        _ => "回收站"
+    };
+
+    /// <summary>
+    /// 分级色调（"safe" / "accent" / "caution" / "info"）：四个分级在列表里必须有**一致的视觉语言**（需求 5.3-4），
+    /// 只给语义、不写色值（需求 5.3-1 的令牌集中原则）。
+    /// 判据是"删掉之后会发生什么"：L1 会自动重建=安全绿，L2 要重下/重登=主色蓝，
+    /// L3 有不可逆风险=注意橙，回收站里的东西是用户自己删的=信息青。
+    /// </summary>
+    public string Tone => Category switch
+    {
+        CleanCategory.L1OneClick => "safe",
+        CleanCategory.L2Recommended => "accent",
+        CleanCategory.L3Cautious => "caution",
+        _ => "info"
+    };
+
     public string Hint => MainViewModel.CategoryHint(Category);
 
     public IReadOnlyList<CleanItemViewModel> Items { get; }
@@ -1153,6 +1381,12 @@ public sealed class CleanSectionViewModel : ViewModelBase
     public long InformationalBytes => Items.Where(i => i.IsInformationalOnly).Sum(i => i.TotalBytes);
 
     public string TotalText => MainViewModel.FormatBytes(TotalBytes);
+
+    /// <summary>
+    /// 只有项数的文案（"6 项"）。为什么不直接用 <see cref="CountText"/>：那个里面已经带了体积，
+    /// 而体积在界面上就写在这行上面，两处重复会显得啰嗦（并把"项数"这个更有用的信息淹没）。
+    /// </summary>
+    public string ItemCountText => $"{Count} 项";
 
     public string CountText => InformationalBytes > 0
         ? $"{Count} 项 / {TotalText}（另有仅展示 {MainViewModel.FormatBytes(InformationalBytes)}，不会清理）"

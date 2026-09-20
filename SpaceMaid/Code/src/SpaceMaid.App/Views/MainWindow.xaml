@@ -2,180 +2,516 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:hc="https://handyorg.github.io/handycontrol"
-        xmlns:helpers="clr-namespace:SpaceMaid.App.Helpers"
         xmlns:vm="clr-namespace:SpaceMaid.App.ViewModels"
         Title="SpaceMaid C 盘空间管家"
-        Width="1000" Height="720"
-        MinWidth="900" MinHeight="640"
+        Width="1180" Height="780"
+        MinWidth="1040" MinHeight="680"
         WindowStartupLocation="CenterScreen"
-        TextOptions.TextFormattingMode="Display">
+        Background="{DynamicResource BackgroundBrush}"
+        TextOptions.TextFormattingMode="Display"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
 
     <!--
-      三段式主窗（需求 5.1）：
-      ① 顶部：磁盘总览（环形占用图 + 总容量 / 已用 / 可用 / 本次可处理）
-      ② 中部：L1 / L2 / L3 / 回收站 四个 hc:Expander 分组清单
-      ③ 底部：重新扫描 / 导出清单 / 清理选中项 / 一键清理（L1）/ 设置
-      颜色与字号一律走 Themes/DesignTokens.xaml 的 key；风险红只用 DangerBrush 做文字强调（需求 5.3-3 / 5.4）。
+      ══════════════════════════════════════════════════════════════════════════════════
+      主窗 = 左侧导航栏（品牌 + 三个页面 + 磁盘状态）+ 右侧内容区（页头 / 页面 / 状态栏）
+      ══════════════════════════════════════════════════════════════════════════════════
+
+      需求对应：
+      · 5.3-1 统一设计系统：所有颜色/字号/间距/图标都来自 Themes/DesignTokens.xaml；
+      · 5.3-2 层级清晰：本次可处理量用 SmTextDisplay（30px 主色粗体）最显著，
+        路径样例/副作用压到 Caption/Meta 级别弱化；留白走 SmSpace* 刻度；
+      · 5.3-3 三级按钮：主按钮=一键清理（L1）、危险按钮=清理选中项、次按钮=重新扫描/导出/设置；
+        风险文案只用红色文字单点强调（5.4-6，不做大面积色块）；
+      · 5.3-4 一致的状态语言：每个分级一个色标（L1 安全绿 / L2 主色蓝 / L3 注意橙 / 回收站 信息青），
+        与列表项的"安全 / 注意 / 危险"色标同一套映射；
+      · 5.4-3/4 风险标注：风险项名称后括号写动作性质并用红色文字，L3 就地给出恢复方式。
+
+      控件策略：交互控件一律 HandyControl（hc:TextBox / hc:NumericUpDown / hc:ToggleBlock /
+      hc:TabControl / hc:CircleProgressBar / hc:Tag / hc:Divider / hc:ScrollViewer / hc:Empty / hc:Growl）；
+      HC 3.5.1 未提供的 Button / CheckBox / Expander 用 WPF 原生控件 + HC 皮肤样式（ButtonPrimary 等）。
+      「导航项」用原生 RadioButton + 自定义模板：HC 的 hc:SideMenu 是"整页宿主"式控件，与本窗的
+      单窗口视图切换不是一套模型；模板只做外观，不改变控件的选中语义。
     -->
 
-    <Window.Resources>
-        <helpers:BoolToVisibilityConverter x:Key="BoolToVisibility" />
-        <helpers:BoolToVisibilityConverter x:Key="InverseBoolToVisibility" Invert="True" />
-        <helpers:TextToVisibilityConverter x:Key="TextToVisibility" />
-        <helpers:CountToVisibilityConverter x:Key="CountToVisibility" />
-    </Window.Resources>
-
     <Grid>
-        <!-- 轻提示层：token 与 App 里的 GrowlNotificationService 配对（构造函数中 Growl.Register） -->
+        <!-- 轻提示层：与 App 里的 GrowlNotificationService 配对（构造函数中 Growl.Register） -->
         <StackPanel x:Name="GrowlPanel"
                     VerticalAlignment="Top" HorizontalAlignment="Right"
                     hc:Growl.Token="SpaceMaidGrowl"
                     hc:Growl.GrowlParent="True" />
 
-        <DockPanel Margin="{StaticResource SmPagePadding}">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
-            <!-- ① 顶部：磁盘总览 -->
-            <hc:Card DockPanel.Dock="Top" Margin="{StaticResource SmCardMargin}" Padding="{StaticResource SmCardPadding}">
+            <!-- ═══════════════ 左侧导航栏 ═══════════════ -->
+            <Border Grid.Column="0" Width="{StaticResource SmRailWidth}"
+                    Background="{DynamicResource SecondaryRegionBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,1,0">
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                    <hc:CircleProgressBar Grid.Column="0"
-                                          Width="118" Height="118"
-                                          Margin="0,0,20,0"
-                                          Maximum="100"
-                                          Value="{Binding UsedPercent100, Mode=OneWay}"
-                                          ShowText="True" />
-
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Style="{StaticResource SmTextTitle}" Text="C 盘空间总览" />
-                        <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextBody}"
-                                   Text="{Binding DiskHeadline, Mode=OneWay}" />
-                        <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
-                                   Text="{Binding StartupStatusMessage, Mode=OneWay}" />
-                        <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
-                                   Text="{Binding SameVolumeNotice, Mode=OneWay}" />
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="2" MinWidth="200" VerticalAlignment="Center">
-                        <TextBlock Style="{StaticResource SmTextCaption}" Text="总容量" />
-                        <TextBlock Style="{StaticResource SmTextNumber}" Text="{Binding VolumeTotalText, Mode=OneWay}" />
-                        <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextCaption}" Text="已用" />
-                        <TextBlock Style="{StaticResource SmTextNumber}" Text="{Binding VolumeUsedText, Mode=OneWay}" />
-                        <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextCaption}" Text="可用" />
-                        <TextBlock Style="{StaticResource SmTextNumber}" Text="{Binding VolumeFreeText, Mode=OneWay}" />
-                        <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextCaption}" Text="本次可处理" />
-                        <TextBlock Style="{StaticResource SmTextNumber}" Text="{Binding ProcessableText, Mode=OneWay}" />
-                    </StackPanel>
-                </Grid>
-            </hc:Card>
-
-            <!-- 启动自检 / 权限提示（需求 3.6-2：未提权时明确阻止进入清理流程） -->
-            <Border DockPanel.Dock="Top" Margin="0,0,0,12" Padding="12,8"
-                    Visibility="{Binding IsFlowBlocked, Converter={StaticResource BoolToVisibility}, Mode=OneWay}">
-                <StackPanel Orientation="Horizontal">
-                    <hc:Tag Content="需要处理" Margin="0,0,8,0" />
-                    <TextBlock Style="{StaticResource SmTextDanger}" Text="{Binding BlockReason, Mode=OneWay}" />
-                </StackPanel>
-            </Border>
-
-            <!-- ③ 底部：操作栏（先 Dock 底部；中间区域自动填充并滚动） -->
-            <Border DockPanel.Dock="Bottom" Margin="0,12,0,0">
-                <StackPanel>
-                    <hc:Divider Margin="0,0,0,10" />
-
-                    <StackPanel Orientation="Horizontal">
-                        <Button Name="RescanButton" Command="{Binding RescanCommand}" Content="重新扫描" />
-                        <Button Name="ExportManifestButton" Margin="8,0,0,0" Command="{Binding ExportManifestCommand}"
-                                Content="导出清单" />
-                        <Button Name="CleanSelectedButton" Margin="8,0,0,0" Command="{Binding CleanSelectedCommand}"
-                                Content="清理选中项" />
-                        <Button Name="OneClickCleanButton" Margin="8,0,0,0" Command="{Binding OneClickCleanCommand}"
-                                Content="一键清理（L1）" Style="{StaticResource ButtonPrimary}" />
-                        <Button Name="SettingsButton" Margin="8,0,0,0" Command="{Binding OpenSettingsCommand}"
-                                Content="设置" />
-                    </StackPanel>
-
-                    <Grid Margin="0,10,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="230" />
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                            <TextBlock Style="{StaticResource SmTextBody}" Text="{Binding TotalProcessableText, Mode=OneWay}" />
-                            <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
-                                       Text="{Binding CheckedSummaryText, Mode=OneWay}" />
-                            <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
-                                       Text="{Binding StatusMessage, Mode=OneWay}" />
-                        </StackPanel>
-
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <ProgressBar Height="6" IsIndeterminate="True"
-                                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}, Mode=OneWay}" />
-                            <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
-                                       Text="{Binding ProgressText, Mode=OneWay}" />
-                        </StackPanel>
-                    </Grid>
-                </StackPanel>
-            </Border>
-
-            <!-- ② 中部：分级清单（可滚动，长任务不冻结界面，需求 5.2-5） -->
-            <hc:ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel>
-
-                    <!-- 执行结果页（需求 3.2-4 / 3.9-4：实际效果 + 跳过项 + 可还原项 + 复核入口） -->
-                    <hc:Card Margin="{StaticResource SmCardMargin}" Padding="{StaticResource SmCardPadding}"
-                             Visibility="{Binding HasExecutionResult, Converter={StaticResource BoolToVisibility}, Mode=OneWay}">
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource SmTextSection}" Text="本次执行结果" />
-                            <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextBody}"
-                                       Text="{Binding ResultSummaryText, Mode=OneWay}" />
-                            <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
-                                       Text="{Binding ResultDetailText, Mode=OneWay}" />
-                            <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextDanger}"
-                                       Text="{Binding ReviewHint, Mode=OneWay}" />
-                            <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
-                                <Button Name="OpenReviewButton" Command="{Binding RunReviewCommand}" Content="查看复核报告" />
-                                <Button Margin="8,0,0,0" Command="{Binding OpenReportDirectoryCommand}" Content="打开报告目录" />
+                    <!-- 品牌区 -->
+                    <StackPanel Grid.Row="0" Margin="18,20,18,14">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="34" Height="34" CornerRadius="{StaticResource SmRadiusMd}"
+                                    Background="{DynamicResource RegionBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                <Image Source="Assets/logo-64.png" Width="26" Height="26"
+                                       RenderOptions.BitmapScalingMode="HighQuality" />
+                            </Border>
+                            <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource SmTextTitle}" Text="SpaceMaid" />
+                                <TextBlock Style="{StaticResource SmTextMeta}" Text="C 盘空间管家" />
                             </StackPanel>
                         </StackPanel>
-                    </hc:Card>
+                    </StackPanel>
 
-                    <!-- 四个分级分组（HandyControl 3.5.1 没有 hc:Expander，用 WPF 原生 Expander；样式由 HC 皮肤统一） -->
-                    <ItemsControl ItemsSource="{Binding Sections}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type vm:CleanSectionViewModel}">
-                                <Expander Margin="0,0,0,10" IsExpanded="{Binding IsExpanded, Mode=TwoWay}">
-                                    <Expander.Header>
+                    <!-- 导航项（RadioButton 同组互斥；选中即切页） -->
+                    <StackPanel Grid.Row="1" Margin="0,4,0,0">
+                        <TextBlock Style="{StaticResource SmTextLabel}" Text="工作台" Margin="20,6,0,6" />
+
+                        <RadioButton x:Name="NavOverview" Style="{StaticResource SmNavItem}"
+                                     GroupName="SpaceMaidNav"
+                                     Command="{Binding NavigateCommand}" CommandParameter="overview"
+                                     IsChecked="{Binding IsOverviewActive, Mode=TwoWay}">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Style="{StaticResource SmNavIcon}" Data="{StaticResource SmIconDrive}" />
+                                <TextBlock Margin="12,0,0,0" Text="磁盘概览" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton x:Name="NavClean" Style="{StaticResource SmNavItem}"
+                                     GroupName="SpaceMaidNav"
+                                     Command="{Binding NavigateCommand}" CommandParameter="clean"
+                                     IsChecked="{Binding IsCleanActive, Mode=TwoWay}">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource SmNavIcon}" Data="{StaticResource SmIconSparkle}" />
+                                    <TextBlock Margin="12,0,0,0" Text="清理计划" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <!-- 已勾选数量：贴着导航项右侧，让人一眼知道"我现在选了多少" -->
+                                <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                                        Style="{StaticResource SmChipAccent}"
+                                        Padding="7,1" MinHeight="18"
+                                        Visibility="{Binding CheckedCount, Converter={StaticResource CountToVisibility}}">
+                                    <TextBlock Style="{StaticResource SmTextMeta}" Foreground="{DynamicResource DarkPrimaryBrush}"
+                                               Text="{Binding CheckedCount, Mode=OneWay}" />
+                                </Border>
+                            </Grid>
+                        </RadioButton>
+
+                        <RadioButton x:Name="NavQuarantine" Style="{StaticResource SmNavItem}"
+                                     GroupName="SpaceMaidNav"
+                                     Command="{Binding NavigateCommand}" CommandParameter="quarantine"
+                                     IsChecked="{Binding IsQuarantineActive, Mode=TwoWay}">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Style="{StaticResource SmNavIcon}" Data="{StaticResource SmIconHistory}" />
+                                <TextBlock Margin="12,0,0,0" Text="隔离区" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <Rectangle Height="1" Margin="20,10,20,10" Fill="{DynamicResource BorderBrush}" />
+
+                        <Button x:Name="NavSettings" Style="{StaticResource SmNavAction}"
+                                Command="{Binding NavigateCommand}" CommandParameter="settings">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Style="{StaticResource SmIcon}" Fill="{DynamicResource SecondaryTextBrush}"
+                                      Data="{StaticResource SmIconTune}" />
+                                <TextBlock Margin="12,0,0,0" Text="设置" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource PrimaryTextBrush}" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- 底部：磁盘状态 + 版本 -->
+                    <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+                        <StackPanel Margin="18,14,18,16">
+                            <TextBlock Style="{StaticResource SmTextLabel}" Text="C 盘可用空间" />
+                            <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextMetric}"
+                                       Text="{Binding VolumeFreeText, Mode=OneWay}" />
+                            <ProgressBar Margin="0,8,0,0" Height="4" Minimum="0" Maximum="100"
+                                         Value="{Binding UsedPercent100, Mode=OneWay}"
+                                         Background="{DynamicResource BorderBrush}"
+                                         BorderThickness="0" />
+                            <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextMeta}"
+                                       Text="{Binding DiskHeadline, Mode=OneWay}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- ═══════════════ 内容区 ═══════════════ -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- 页头：标题 + 主操作 -->
+                <Border Grid.Row="0" Height="{StaticResource SmHeaderHeight}"
+                        Background="{DynamicResource RegionBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                    <Grid Margin="20,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource SmTextPageTitle}"
+                                       Text="{Binding ActivePageTitle, Mode=OneWay}" />
+                            <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
+                                       Text="{Binding ActivePageSubtitle, Mode=OneWay}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Name="RescanButton" Style="{StaticResource SmButtonSecondary}"
+                                    Command="{Binding RescanCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource SmIconSm}" Data="{StaticResource SmIconRefresh}" />
+                                    <TextBlock Margin="6,0,0,0" Text="重新扫描" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+
+                            <Button Name="ExportManifestButton" Margin="8,0,0,0" Style="{StaticResource SmButtonSecondary}"
+                                    IsEnabled="{Binding CanExportManifest, Mode=OneWay}"
+                                    Command="{Binding ExportManifestCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource SmIconSm}" Data="{StaticResource SmIconExport}" />
+                                    <TextBlock Margin="6,0,0,0" Text="导出清单" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+
+                            <Button Name="CleanSelectedButton" Margin="8,0,0,0" Style="{StaticResource SmButtonDanger}"
+                                    IsEnabled="{Binding CanExecuteClean, Mode=OneWay}"
+                                    Command="{Binding CleanSelectedCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource SmIconSm}" Data="{StaticResource SmIconTrash}" />
+                                    <TextBlock Margin="6,0,0,0" Text="清理选中项" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+
+                            <Button Name="OneClickCleanButton" Margin="8,0,0,0" Style="{StaticResource SmButtonPrimary}"
+                                    IsEnabled="{Binding CanOneClickClean, Mode=OneWay}"
+                                    Command="{Binding OneClickCleanCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource SmIconSm}" Data="{StaticResource SmIconSparkle}" />
+                                    <TextBlock Margin="6,0,0,0" Text="一键清理（L1）" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- 全局提示条（提权闸门 / 需求 3.6-2）：任何页面都看得见 -->
+                <Border Grid.Row="1" Margin="20,16,20,0" Padding="14,12"
+                        Background="{DynamicResource LightDangerBrush}"
+                        BorderBrush="{DynamicResource DangerBrush}" BorderThickness="1"
+                        CornerRadius="{StaticResource SmRadiusMd}"
+                        Visibility="{Binding IsFlowBlocked, Converter={StaticResource BoolToVisibility}, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource SmIcon}" Data="{StaticResource SmIconShield}"
+                              Fill="{DynamicResource DarkDangerBrush}" />
+                        <StackPanel Margin="10,0,0,0">
+                            <TextBlock Style="{StaticResource SmTextBody}" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource DarkDangerBrush}"
+                                       Text="当前不具备管理员权限，已阻止进入清理流程" />
+                            <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
+                                       Foreground="{DynamicResource DarkDangerBrush}"
+                                       Text="{Binding BlockReason, Mode=OneWay}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══════ 页面 ═══════ -->
+                <Grid Grid.Row="2">
+
+                    <!-- ─────────── 页 1：磁盘概览 ─────────── -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  Padding="20,16,20,16"
+                                  Visibility="{Binding IsOverviewActive, Converter={StaticResource BoolToVisibility}, Mode=OneWay}">
+                        <StackPanel>
+
+                            <!-- 主数字区：本次可处理 + 三个 KPI + 占用环 -->
+                            <hc:Card Style="{StaticResource SmCard}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                        <hc:CircleProgressBar Style="{StaticResource SmRing}"
+                                                              Maximum="100"
+                                                              Value="{Binding UsedPercent100, Mode=OneWay}"
+                                                              Text="{Binding UsedPercentText, Mode=OneWay}" />
+                                        <TextBlock Margin="0,8,0,0" HorizontalAlignment="Center"
+                                                   Style="{StaticResource SmTextCaption}" Text="C 盘已用比例" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource SmTextLabel}" Text="本次可处理" />
+                                        <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextDisplay}"
+                                                   Text="{Binding ProcessableText, Mode=OneWay}" />
+                                        <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextBody}"
+                                                   Text="{Binding TotalProcessableText, Mode=OneWay}" />
+                                        <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
+                                                   Text="{Binding SameVolumeNotice, Mode=OneWay}" />
+
+                                        <!-- KPI 条：总容量 / 已用 / 可用 -->
+                                        <UniformGrid Margin="0,16,0,0" Columns="3">
+                                            <Border Style="{StaticResource SmPanelFlat}" Margin="0,0,8,0">
+                                                <StackPanel>
+                                                    <TextBlock Style="{StaticResource SmTextCaption}" Text="总容量" />
+                                                    <TextBlock Style="{StaticResource SmTextMetric}"
+                                                               Text="{Binding VolumeTotalText, Mode=OneWay}" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Style="{StaticResource SmPanelFlat}" Margin="0,0,8,0">
+                                                <StackPanel>
+                                                    <TextBlock Style="{StaticResource SmTextCaption}" Text="已用" />
+                                                    <TextBlock Style="{StaticResource SmTextMetric}"
+                                                               Text="{Binding VolumeUsedText, Mode=OneWay}" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Style="{StaticResource SmPanelFlat}">
+                                                <StackPanel>
+                                                    <TextBlock Style="{StaticResource SmTextCaption}" Text="可用" />
+                                                    <TextBlock Style="{StaticResource SmTextMetric}"
+                                                               Text="{Binding VolumeFreeText, Mode=OneWay}" />
+                                                </StackPanel>
+                                            </Border>
+                                        </UniformGrid>
+                                    </StackPanel>
+                                </Grid>
+                            </hc:Card>
+
+                            <!-- 启动自检信息（隔离区状态、到期释放、账本自检） -->
+                            <Border Margin="0,0,0,12" Style="{StaticResource SmPanel}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource SmIconSm}" Data="{StaticResource SmIconInfo}"
+                                          Fill="{DynamicResource PrimaryBrush}" />
+                                    <TextBlock Margin="10,0,0,0" Style="{StaticResource SmTextCaption}"
+                                               Text="{Binding StartupStatusMessage, Mode=OneWay}" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 四个分级总览 -->
+                            <TextBlock Margin="2,6,0,8" Style="{StaticResource SmTextTitle}" Text="按分级盘点" />
+                            <ItemsControl ItemsSource="{Binding Sections}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="2" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:CleanSectionViewModel}">
+                                        <hc:Card Margin="0,0,12,12" Padding="16,14">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Border x:Name="TierChip" Style="{StaticResource SmChip}"
+                                                            Padding="8,2">
+                                                        <TextBlock x:Name="TierChipText" Style="{StaticResource SmTextMeta}" Foreground="{DynamicResource SecondaryTextBrush}"
+                                                                   FontWeight="SemiBold" Text="{Binding Badge, Mode=OneWay}" />
+                                                    </Border>
+                                                    <TextBlock Margin="8,0,0,0" Style="{StaticResource SmTextSection}"
+                                                               Text="{Binding Title, Mode=OneWay}" VerticalAlignment="Center" />
+                                                </StackPanel>
+
+                                                <TextBlock Margin="0,8,0,0" Style="{StaticResource SmTextCaption}"
+                                                           Text="{Binding Hint, Mode=OneWay}" MaxHeight="36"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding Hint, Mode=OneWay}" />
+
+                                                <Grid Margin="0,10,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0">
+                                                        <TextBlock Style="{StaticResource SmTextMetric}"
+                                                                   Text="{Binding TotalText, Mode=OneWay}" />
+                                                        <TextBlock Style="{StaticResource SmTextCaption}"
+                                                                   Text="{Binding ItemCountText, Mode=OneWay}" />
+                                                    </StackPanel>
+                                                    <Button Grid.Column="1" VerticalAlignment="Bottom"
+                                                            Style="{StaticResource SmButtonLink}"
+                                                            Content="查看"
+                                                            Command="{Binding DataContext.OpenCategoryCommand,
+                                                                      RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding Category}" />
+                                                </Grid>
+                                            </StackPanel>
+                                        </hc:Card>
+
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Tone}" Value="safe">
+                                                <Setter TargetName="TierChip" Property="Background"
+                                                        Value="{DynamicResource LightSuccessBrush}" />
+                                                <Setter TargetName="TierChipText" Property="Foreground"
+                                                        Value="{DynamicResource DarkSuccessBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Tone}" Value="accent">
+                                                <Setter TargetName="TierChip" Property="Background"
+                                                        Value="{DynamicResource LightPrimaryBrush}" />
+                                                <Setter TargetName="TierChipText" Property="Foreground"
+                                                        Value="{DynamicResource DarkPrimaryBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Tone}" Value="caution">
+                                                <Setter TargetName="TierChip" Property="Background"
+                                                        Value="{DynamicResource LightWarningBrush}" />
+                                                <Setter TargetName="TierChipText" Property="Foreground"
+                                                        Value="{DynamicResource DarkWarningBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Tone}" Value="info">
+                                                <Setter TargetName="TierChip" Property="Background"
+                                                        Value="{DynamicResource LightInfoBrush}" />
+                                                <Setter TargetName="TierChipText" Property="Foreground"
+                                                        Value="{DynamicResource DarkInfoBrush}" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- 隔离区摘要 -->
+                            <hc:Card Style="{StaticResource SmCard}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Style="{StaticResource SmTextSection}" Text="{Binding Title}" />
-                                            <TextBlock Margin="8,0,0,0" Style="{StaticResource SmTextCaption}"
-                                                       Text="{Binding CountText}" />
+                                            <Path Style="{StaticResource SmIconSm}" Data="{StaticResource SmIconHistory}" />
+                                            <TextBlock Margin="8,0,0,0" Style="{StaticResource SmTextSection}" Text="隔离区" />
                                         </StackPanel>
-                                    </Expander.Header>
+                                        <TextBlock Margin="0,8,0,0" Style="{StaticResource SmTextMetric}"
+                                                   Text="{Binding QuarantineUsageText, Mode=OneWay}" />
+                                        <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
+                                                   Text="{Binding QuarantineCountText, Mode=OneWay}" />
+                                        <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
+                                                   Text="{Binding QuarantineExpiredText, Mode=OneWay}" />
+                                    </StackPanel>
 
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Style="{StaticResource SmButtonSecondary}" Content="查看隔离区"
+                                                Command="{Binding NavigateCommand}" CommandParameter="quarantine" />
+                                        <Button Margin="8,0,0,0" Style="{StaticResource SmButtonGhost}"
+                                                Content="隔离区设置…"
+                                                Command="{Binding NavigateCommand}" CommandParameter="settings" />
+                                    </StackPanel>
+                                </Grid>
+                            </hc:Card>
+
+                            <!-- 最近一次执行结果 -->
+                            <hc:Card Style="{StaticResource SmCard}"
+                                     Visibility="{Binding HasExecutionResult, Converter={StaticResource BoolToVisibility}, Mode=OneWay}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Style="{StaticResource SmIconSm}" Data="{StaticResource SmIconCheck}"
+                                              Fill="{DynamicResource SuccessBrush}" />
+                                        <TextBlock Margin="8,0,0,0" Style="{StaticResource SmTextSection}"
+                                                   Text="最近一次执行" />
+                                    </StackPanel>
+                                    <TextBlock Margin="0,8,0,0" Style="{StaticResource SmTextBody}"
+                                               Text="{Binding ResultSummaryText, Mode=OneWay}" />
+                                    <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
+                                               Text="{Binding ResultDetailText, Mode=OneWay}" />
+                                    <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextDanger}"
+                                               Text="{Binding ReviewHint, Mode=OneWay}" />
+                                    <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+                                        <Button Style="{StaticResource SmButtonSecondary}" Content="查看复核报告"
+                                                Command="{Binding RunReviewCommand}" />
+                                        <Button Margin="8,0,0,0" Style="{StaticResource SmButtonGhost}"
+                                                Content="打开报告目录"
+                                                Command="{Binding OpenReportDirectoryCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </hc:Card>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- ─────────── 页 2：清理计划 ─────────── -->
+                    <Grid Visibility="{Binding IsCleanActive, Converter={StaticResource BoolToVisibility}, Mode=OneWay}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                      Padding="20,16,20,16">
+                            <StackPanel>
+
+                                <!-- 工具条：本分级全选/反选（需求 3.3-3：只作用于当前分级） -->
+                                <Border Style="{StaticResource SmPanel}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Style="{StaticResource SmTextBody}"
+                                                       Text="{Binding SelectedCategoryTitle, Mode=OneWay}" />
+                                            <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
+                                                       Text="全选/反选只作用于当前分级；本工具不提供「一键全选所有级别」" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Style="{StaticResource SmButtonSecondary}"
+                                                Content="全选 / 反选本分级"
+                                                Command="{Binding ToggleAllCurrentCategoryCommand}" />
+                                    </Grid>
+                                </Border>
+
+                                <!-- 扫描中（需求 5.2-1：可中断、不冻结） -->
+                                <hc:Card Style="{StaticResource SmCard}"
+                                         Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}, Mode=OneWay}">
                                     <StackPanel>
-                                        <TextBlock Style="{StaticResource SmTextCaption}" Text="{Binding Hint}" />
+                                        <hc:LoadingLine Height="3" />
+                                        <TextBlock Margin="0,10,0,0" Style="{StaticResource SmTextBody}"
+                                                   Text="正在扫描，界面不会冻结；扫描只读，可随时中断。" />
+                                        <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
+                                                   Text="{Binding ProgressText, Mode=OneWay}" />
+                                        <Button Margin="0,10,0,0" HorizontalAlignment="Left"
+                                                Style="{StaticResource SmButtonSecondary}"
+                                                Command="{Binding CancelScanCommand}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Path Style="{StaticResource SmIconSm}" Data="{StaticResource SmIconStop}" />
+                                                <TextBlock Margin="6,0,0,0" Text="中断扫描" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </hc:Card>
 
-                                        <!-- 全选 / 反选只作用于当前分级（需求 3.3-3） -->
-                                        <StackPanel Margin="0,8,0,0" Orientation="Horizontal"
-                                                    Visibility="{Binding HasItems, Converter={StaticResource BoolToVisibility}}">
-                                            <Button Command="{Binding DataContext.ToggleAllCurrentCategoryCommand,
-                                                              RelativeSource={RelativeSource AncestorType=Window}}"
-                                                    Content="全选/反选本分级" />
-                                            <TextBlock Margin="8,0,0,0" VerticalAlignment="Center"
-                                                       Style="{StaticResource SmTextCaption}"
-                                                       Text="（只影响本分级，不提供一键全选所有级别）" />
-                                        </StackPanel>
+                                <!-- 空态（需求 5.2-4） -->
+                                <hc:Card Style="{StaticResource SmCard}"
+                                         Visibility="{Binding HasScanResult, Converter={StaticResource InverseBoolToVisibility}, Mode=OneWay}">
+                                    <StackPanel>
+                                        <hc:Empty Description="还没有扫描结果：先扫描一次，工具会把 C 盘上「该清」和「可能该清」的东西摆出来。"
+                                                  Logo="Assets/logo-64.png" />
+                                        <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextCaption}"
+                                                   Text="扫描只读、可中断，不会移动或删除任何文件。清理前请先「导出清单」并人工审阅。"
+                                                   HorizontalAlignment="Center" TextAlignment="Center" />
+                                        <Button Margin="0,14,0,0" HorizontalAlignment="Center"
+                                                Style="{StaticResource SmButtonPrimary}"
+                                                Command="{Binding RescanCommand}" Content="开始扫描" />
+                                    </StackPanel>
+                                </hc:Card>
 
-                                        <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Items}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate DataType="{x:Type vm:CleanItemViewModel}">
-                                                    <Border Margin="{StaticResource SmItemMargin}" Padding="{StaticResource SmItemPadding}">
+                                <!-- 四个分级分组 -->
+                                <ItemsControl ItemsSource="{Binding Sections}"
+                                              Visibility="{Binding HasScanResult, Converter={StaticResource BoolToVisibility}, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:CleanSectionViewModel}">
+                                            <Expander Margin="0,0,0,10" IsExpanded="{Binding IsExpanded, Mode=TwoWay}">
+                                                <Expander.Header>
+                                                    <Border Style="{StaticResource SmSectionHeader}" Margin="0,0,0,2">
                                                         <Grid>
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="Auto" />
@@ -183,84 +519,324 @@
                                                                 <ColumnDefinition Width="Auto" />
                                                             </Grid.ColumnDefinitions>
 
-                                                            <!-- L2 / L3 / 回收站可勾选；L1 随"一键清理"执行，没有勾选框（需求 2.2） -->
-                                                            <CheckBox Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Top"
-                                                                      IsChecked="{Binding IsChecked, Mode=TwoWay}"
-                                                                      Visibility="{Binding ShowCheckBox, Converter={StaticResource BoolToVisibility}}" />
+                                                            <Border x:Name="TierChip" Grid.Column="0" Style="{StaticResource SmChip}" Padding="8,2">
+                                                                <TextBlock x:Name="TierChipText" Style="{StaticResource SmTextMeta}" Foreground="{DynamicResource SecondaryTextBrush}"
+                                                                           FontWeight="SemiBold" Text="{Binding Badge, Mode=OneWay}" />
+                                                            </Border>
 
-                                                            <StackPanel Grid.Column="1">
-                                                                <TextBlock Style="{StaticResource SmTextBody}">
-                                                                    <Run Text="{Binding DisplayName, Mode=OneWay}" /><Run
-                                                                        Text="{Binding ActionNote, Mode=OneWay, StringFormat=（{0}）}"
-                                                                        Foreground="{DynamicResource DangerBrush}"
-                                                                        FontWeight="SemiBold" />
-                                                                </TextBlock>
-                                                                <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
-                                                                           Text="{Binding SideEffect, Mode=OneWay}" />
-                                                                <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
-                                                                           Text="{Binding PathsSample, Mode=OneWay}" />
-                                                                <!-- L3 就地显示恢复方式（需求 5.4-4） -->
-                                                                <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextDanger}"
-                                                                           Text="{Binding RestoreHint, Mode=OneWay}"
-                                                                           Visibility="{Binding RestoreHint, Converter={StaticResource TextToVisibility}}" />
-                                                                <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
-                                                                           Text="{Binding KeptText, Mode=OneWay}"
-                                                                           Visibility="{Binding HasKept, Converter={StaticResource BoolToVisibility}}" />
-                                                                <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
-                                                                           Text="{Binding Note, Mode=OneWay}"
-                                                                           Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}" />
+                                                            <StackPanel Grid.Column="1" Margin="10,0,10,0">
+                                                                <TextBlock Style="{StaticResource SmTextTitle}"
+                                                                           Text="{Binding Title, Mode=OneWay}" />
+                                                                <TextBlock Style="{StaticResource SmTextCaption}"
+                                                                           Text="{Binding Hint, Mode=OneWay}"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           ToolTip="{Binding Hint, Mode=OneWay}" />
                                                             </StackPanel>
 
-                                                            <StackPanel Grid.Column="2" MinWidth="120" HorizontalAlignment="Right">
-                                                                <TextBlock HorizontalAlignment="Right" Style="{StaticResource SmTextBody}"
-                                                                           Text="{Binding SizeText, Mode=OneWay}" />
-                                                                <TextBlock HorizontalAlignment="Right" Style="{StaticResource SmTextCaption}"
-                                                                           Text="{Binding FileCountText, Mode=OneWay}"
-                                                                           Visibility="{Binding FileCount, Converter={StaticResource CountToVisibility}}" />
-                                                                <hc:Tag Margin="0,4,0,0" HorizontalAlignment="Right"
-                                                                        Content="{Binding RiskText, Mode=OneWay}"
-                                                                        Visibility="{Binding IsDangerous, Converter={StaticResource BoolToVisibility}}" />
-                                                                <TextBlock Margin="0,4,0,0" HorizontalAlignment="Right"
-                                                                           Style="{StaticResource SmTextCaption}"
-                                                                           Text="{Binding ActionText, Mode=OneWay}" />
+                                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                                                                    <TextBlock HorizontalAlignment="Right"
+                                                                               Style="{StaticResource SmTextMetric}"
+                                                                               Text="{Binding TotalText, Mode=OneWay}" />
+                                                                    <TextBlock HorizontalAlignment="Right"
+                                                                               Style="{StaticResource SmTextCaption}"
+                                                                               Text="{Binding ItemCountText, Mode=OneWay}" />
+                                                                </StackPanel>
+                                                                <Button Style="{StaticResource SmButtonLink}" Content="全选 / 反选"
+                                                                        Command="{Binding DataContext.ToggleCategoryAllCommand,
+                                                                                  RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                        CommandParameter="{Binding Category}" />
                                                             </StackPanel>
                                                         </Grid>
                                                     </Border>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
+                                                </Expander.Header>
+
+                                                <ItemsControl Margin="0,4,0,0" ItemsSource="{Binding Items}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate DataType="{x:Type vm:CleanItemViewModel}">
+                                                            <Border Style="{StaticResource SmRow}">
+                                                                <Grid>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                    </Grid.ColumnDefinitions>
+
+                                                                    <!-- 勾选框：L1（随一键清理执行）与信息项（仅展示）没有勾选框 -->
+                                                                    <Grid Grid.Column="0" Width="22" Margin="0,0,12,0">
+                                                                        <CheckBox x:Name="ItemCheck" VerticalAlignment="Top" Margin="0,2,0,0"
+                                                                                  IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                                                  Visibility="{Binding ShowCheckBox, Converter={StaticResource BoolToVisibility}}" />
+                                                                        <Path x:Name="OneClickMark" VerticalAlignment="Top" Margin="2,2,0,0"
+                                                                              Width="14" Height="14" Stretch="Uniform"
+                                                                              Data="{StaticResource SmIconCheck}"
+                                                                              Fill="{DynamicResource SuccessBrush}"
+                                                                              Visibility="{Binding ShowCheckBox, Converter={StaticResource InverseBoolToVisibility}}"
+                                                                              ToolTip="L1 项随「一键清理」执行" />
+                                                                    </Grid>
+
+                                                                    <StackPanel Grid.Column="1" Margin="0,0,16,0">
+                                                                        <StackPanel Orientation="Horizontal">
+                                                                            <TextBlock Style="{StaticResource SmTextBody}" FontWeight="SemiBold"
+                                                                                       Text="{Binding DisplayName, Mode=OneWay}" />
+                                                                            <!-- 需求 5.4-3：风险项在名称后用括号写动作性质（空的不渲染，不留空括号） -->
+                                                                            <TextBlock x:Name="RiskNote" Margin="4,0,0,0"
+                                                                                       Style="{StaticResource SmTextBody}" FontWeight="SemiBold"
+                                                                                       Text="{Binding ActionNote, Mode=OneWay, StringFormat=（{0}）}"
+                                                                                       Visibility="{Binding ActionNote, Converter={StaticResource TextToVisibility}}" />
+                                                                        </StackPanel>
+
+                                                                        <TextBlock x:Name="SideEffectText" Margin="0,2,0,0"
+                                                                                   Style="{StaticResource SmTextCaption}"
+                                                                                   Text="{Binding SideEffect, Mode=OneWay}"
+                                                                                   MaxHeight="34" TextTrimming="CharacterEllipsis"
+                                                                                   ToolTip="{Binding SideEffect, Mode=OneWay}" />
+
+                                                                        <TextBlock x:Name="RestoreHintText" Margin="0,3,0,0"
+                                                                                   Style="{StaticResource SmTextDanger}"
+                                                                                   Text="{Binding RestoreHint, Mode=OneWay}"
+                                                                                   Visibility="{Binding RestoreHint, Converter={StaticResource TextToVisibility}}" />
+
+                                                                        <TextBlock Margin="0,3,0,0" Style="{StaticResource SmTextMeta}"
+                                                                                   Text="{Binding PathsSample, Mode=OneWay}"
+                                                                                   TextTrimming="CharacterEllipsis" />
+
+                                                                        <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
+                                                                                   Text="{Binding KeptText, Mode=OneWay}"
+                                                                                   Visibility="{Binding HasKept, Converter={StaticResource BoolToVisibility}}" />
+
+                                                                        <StackPanel Margin="0,3,0,0" Orientation="Horizontal"
+                                                                                    Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}">
+                                                                            <Path Style="{StaticResource SmIconSm}" Data="{StaticResource SmIconWarning}"
+                                                                                  Fill="{DynamicResource WarningBrush}" Width="12" Height="12" />
+                                                                            <TextBlock Margin="6,0,0,0" Style="{StaticResource SmTextWarning}"
+                                                                                       Text="{Binding Note, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                                                                        </StackPanel>
+                                                                    </StackPanel>
+
+                                                                    <!-- 数值列：等宽数字右对齐，扫一眼就能比大小 -->
+                                                                    <StackPanel Grid.Column="2" MinWidth="132" HorizontalAlignment="Right">
+                                                                        <TextBlock HorizontalAlignment="Right"
+                                                                                   Style="{StaticResource SmTextMetric}"
+                                                                                   Text="{Binding SizeText, Mode=OneWay}" />
+                                                                        <TextBlock HorizontalAlignment="Right"
+                                                                                   Style="{StaticResource SmTextCaption}"
+                                                                                   Text="{Binding FileCountText, Mode=OneWay}"
+                                                                                   Visibility="{Binding FileCount, Converter={StaticResource CountToVisibility}}" />
+
+                                                                        <StackPanel Margin="0,6,0,0" Orientation="Horizontal"
+                                                                                    HorizontalAlignment="Right"
+                                                                                    Visibility="{Binding IsDangerous, Converter={StaticResource BoolToVisibility}}">
+                                                                            <Border x:Name="RiskChip" Style="{StaticResource SmChip}" Padding="7,1">
+                                                                                <TextBlock x:Name="RiskChipText" Style="{StaticResource SmTextMeta}" Foreground="{DynamicResource SecondaryTextBrush}"
+                                                                                           FontWeight="SemiBold"
+                                                                                           Text="{Binding RiskText, Mode=OneWay}" />
+                                                                            </Border>
+                                                                        </StackPanel>
+
+                                                                        <TextBlock Margin="0,4,0,0" HorizontalAlignment="Right"
+                                                                                   Style="{StaticResource SmTextMeta}"
+                                                                                   Text="{Binding ActionText, Mode=OneWay}" />
+                                                                    </StackPanel>
+                                                                </Grid>
+                                                            </Border>
+
+                                                            <DataTemplate.Triggers>
+                                                                <!-- 需求 5.4-3：风险项名称后的动作性质用红色文字强调（只强调文字，不做底色） -->
+                                                                <DataTrigger Binding="{Binding IsDangerous}" Value="True">
+                                                                    <Setter TargetName="RiskNote" Property="Foreground"
+                                                                            Value="{DynamicResource DangerBrush}" />
+                                                                </DataTrigger>
+                                                                <!-- 状态色标与分级色标共用同一套映射（需求 5.3-4） -->
+                                                                <DataTrigger Binding="{Binding RiskTone}" Value="safe">
+                                                                    <Setter TargetName="RiskChip" Property="Background"
+                                                                            Value="{DynamicResource LightSuccessBrush}" />
+                                                                    <Setter TargetName="RiskChipText" Property="Foreground"
+                                                                            Value="{DynamicResource DarkSuccessBrush}" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding RiskTone}" Value="caution">
+                                                                    <Setter TargetName="RiskChip" Property="Background"
+                                                                            Value="{DynamicResource LightWarningBrush}" />
+                                                                    <Setter TargetName="RiskChipText" Property="Foreground"
+                                                                            Value="{DynamicResource DarkWarningBrush}" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding RiskTone}" Value="danger">
+                                                                    <Setter TargetName="RiskChip" Property="Background"
+                                                                            Value="{DynamicResource LightDangerBrush}" />
+                                                                    <Setter TargetName="RiskChipText" Property="Foreground"
+                                                                            Value="{DynamicResource DarkDangerBrush}" />
+                                                                </DataTrigger>
+                                                                <!-- 仅展示项（页面文件）：灰掉勾选区并标注"仅展示" -->
+                                                                <DataTrigger Binding="{Binding IsInformationalOnly}" Value="True">
+                                                                    <Setter TargetName="OneClickMark" Property="Visibility" Value="Collapsed" />
+                                                                    <Setter TargetName="RiskChip" Property="Background"
+                                                                            Value="{DynamicResource SecondaryRegionBrush}" />
+                                                                    <Setter TargetName="RiskChipText" Property="Foreground"
+                                                                            Value="{DynamicResource SecondaryTextBrush}" />
+                                                                    <Setter TargetName="SideEffectText" Property="Visibility" Value="Visible" />
+                                                                </DataTrigger>
+                                                            </DataTemplate.Triggers>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Expander>
+
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding Tone}" Value="safe">
+                                                    <Setter TargetName="TierChip" Property="Background"
+                                                            Value="{DynamicResource LightSuccessBrush}" />
+                                                    <Setter TargetName="TierChipText" Property="Foreground"
+                                                            Value="{DynamicResource DarkSuccessBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Tone}" Value="accent">
+                                                    <Setter TargetName="TierChip" Property="Background"
+                                                            Value="{DynamicResource LightPrimaryBrush}" />
+                                                    <Setter TargetName="TierChipText" Property="Foreground"
+                                                            Value="{DynamicResource DarkPrimaryBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Tone}" Value="caution">
+                                                    <Setter TargetName="TierChip" Property="Background"
+                                                            Value="{DynamicResource LightWarningBrush}" />
+                                                    <Setter TargetName="TierChipText" Property="Foreground"
+                                                            Value="{DynamicResource DarkWarningBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Tone}" Value="info">
+                                                    <Setter TargetName="TierChip" Property="Background"
+                                                            Value="{DynamicResource LightInfoBrush}" />
+                                                    <Setter TargetName="TierChipText" Property="Foreground"
+                                                            Value="{DynamicResource DarkInfoBrush}" />
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- 执行结果（需求 3.2-4 / 3.9-4） -->
+                                <hc:Card Style="{StaticResource SmCard}"
+                                         Visibility="{Binding HasExecutionResult, Converter={StaticResource BoolToVisibility}, Mode=OneWay}">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Style="{StaticResource SmIconSm}" Data="{StaticResource SmIconCheck}"
+                                                  Fill="{DynamicResource SuccessBrush}" />
+                                            <TextBlock Margin="8,0,0,0" Style="{StaticResource SmTextSection}"
+                                                       Text="本次执行结果" />
+                                        </StackPanel>
+                                        <TextBlock Margin="0,8,0,0" Style="{StaticResource SmTextBody}"
+                                                   Text="{Binding ResultSummaryText, Mode=OneWay}" />
+                                        <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
+                                                   Text="{Binding ResultDetailText, Mode=OneWay}" />
+                                        <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextDanger}"
+                                                   Text="{Binding ReviewHint, Mode=OneWay}" />
+                                        <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+                                            <Button Style="{StaticResource SmButtonSecondary}" Content="查看复核报告"
+                                                    Command="{Binding RunReviewCommand}" />
+                                            <Button Margin="8,0,0,0" Style="{StaticResource SmButtonGhost}"
+                                                    Content="打开报告目录"
+                                                    Command="{Binding OpenReportDirectoryCommand}" />
+                                        </StackPanel>
                                     </StackPanel>
-                                </Expander>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                                </hc:Card>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
 
-                    <!-- 空态（需求 5.2-4） -->
-                    <hc:Card Margin="{StaticResource SmCardMargin}" Padding="{StaticResource SmCardPadding}"
-                             Visibility="{Binding HasScanResult, Converter={StaticResource InverseBoolToVisibility}, Mode=OneWay}">
+                    <!-- ─────────── 页 3：隔离区 ─────────── -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  Padding="20,16,20,16"
+                                  Visibility="{Binding IsQuarantineActive, Converter={StaticResource BoolToVisibility}, Mode=OneWay}">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource SmTextSection}" Text="还没有扫描结果" />
-                            <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextBody}"
-                                       Text="点上方「重新扫描」开始盘点 C 盘。扫描只读、可中断，不会移动或删除任何文件。" />
-                            <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
-                                       Text="清理前请先「导出清单」并人工审阅：导出与执行是两个独立动作，中间不会自动衔接。" />
-                        </StackPanel>
-                    </hc:Card>
+                            <hc:Card Style="{StaticResource SmCard}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
 
-                    <!-- 扫描进行中：可中断（需求 5.2-1） -->
-                    <hc:Card Margin="{StaticResource SmCardMargin}" Padding="{StaticResource SmCardPadding}"
-                             Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}, Mode=OneWay}">
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource SmTextBody}"
-                                       Text="正在扫描，界面不会冻结；扫描只读，可随时中断。" />
-                            <TextBlock Margin="0,4,0,0" Style="{StaticResource SmTextCaption}"
-                                       Text="{Binding ProgressText, Mode=OneWay}" />
-                            <Button Margin="0,8,0,0" HorizontalAlignment="Left" Command="{Binding CancelScanCommand}"
-                                    Content="中断扫描" />
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Style="{StaticResource SmTextLabel}" Text="当前占用" />
+                                        <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextDisplay}"
+                                                   Text="{Binding QuarantineUsageText, Mode=OneWay}" />
+                                        <TextBlock Margin="0,6,0,0" Style="{StaticResource SmTextCaption}"
+                                                   Text="清掉的不是删除：文件先在这里等保留期，期间可以随时还原（需求 2.1 / 3.4-6）。" />
+                                        <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
+                                                   Text="{Binding QuarantineExpiredText, Mode=OneWay}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Style="{StaticResource SmButtonSecondary}" Content="刷新"
+                                                Command="{Binding RefreshQuarantineCommand}" />
+                                        <Button Margin="8,0,0,0" Style="{StaticResource SmButtonGhost}"
+                                                Content="保留期与清空…"
+                                                Command="{Binding NavigateCommand}" CommandParameter="settings" />
+                                    </StackPanel>
+                                </Grid>
+                            </hc:Card>
+
+                            <hc:Card Style="{StaticResource SmCard}"
+                                     Visibility="{Binding HasQuarantineBatches, Converter={StaticResource BoolToVisibility}, Mode=OneWay}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource SmTextSection}" Text="批次（按时间倒序）" />
+                                    <ItemsControl Margin="0,6,0,0" ItemsSource="{Binding QuarantineBatches}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:QuarantineBatchViewModel}">
+                                                <Border Style="{StaticResource SmRow}">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Grid.Column="0">
+                                                            <TextBlock Style="{StaticResource SmTextBody}"
+                                                                       Text="{Binding SummaryText, Mode=OneWay}" />
+                                                            <TextBlock Style="{StaticResource SmTextDanger}"
+                                                                       Text="{Binding ExpiredText, Mode=OneWay}"
+                                                                       Visibility="{Binding IsExpired, Converter={StaticResource BoolToVisibility}}" />
+                                                            <TextBlock Margin="0,2,0,0" Style="{StaticResource SmTextCaption}"
+                                                                       Text="{Binding StatusText, Mode=OneWay}" />
+                                                        </StackPanel>
+                                                        <Button Grid.Column="1" VerticalAlignment="Center"
+                                                                Style="{StaticResource SmButtonSecondary}"
+                                                                Content="还原此批次…" Command="{Binding RestoreCommand}" />
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </hc:Card>
+
+                            <hc:Card Style="{StaticResource SmCard}"
+                                     Visibility="{Binding HasQuarantineBatches, Converter={StaticResource InverseBoolToVisibility}, Mode=OneWay}">
+                                <hc:Empty Description="隔离区里还没有批次：等第一次清理之后，被清掉的文件会出现在这里。"
+                                          Logo="Assets/logo-64.png" />
+                            </hc:Card>
                         </StackPanel>
-                    </hc:Card>
-                </StackPanel>
-            </hc:ScrollViewer>
-        </DockPanel>
+                    </ScrollViewer>
+                </Grid>
+
+                <!-- 状态栏 -->
+                <Border Grid.Row="3" Height="38" Background="{DynamicResource SecondaryRegionBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+                    <Grid Margin="20,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                                   Style="{StaticResource SmTextCaption}"
+                                   Text="{Binding StatusMessage, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis" />
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <ProgressBar Width="86" Height="4" IsIndeterminate="True" Margin="0,0,10,0"
+                                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}, Mode=OneWay}" />
+                            <TextBlock VerticalAlignment="Center" Style="{StaticResource SmTextCaption}"
+                                       Text="{Binding CheckedSummaryText, Mode=OneWay}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
     </Grid>
 </Window>

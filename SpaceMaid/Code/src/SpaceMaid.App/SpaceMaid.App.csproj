@@ -35,6 +35,9 @@
   <ItemGroup>
     <!-- 图标由 Code/scripts/gen-icon.ps1 程序化生成（勿手工编辑） -->
     <Resource Include="Assets\app.ico" Condition="Exists('Assets\app.ico')" />
+    <!-- 品牌图由 Code/scripts/gen-logo.ps1 程序化生成（勿手工编辑） -->
+    <Resource Include="Assets\logo.png" Condition="Exists('Assets\logo.png')" />
+    <Resource Include="Assets\logo-64.png" Condition="Exists('Assets\logo-64.png')" />
   </ItemGroup>
 
   <PropertyGroup Condition="Exists('Assets\app.ico')">

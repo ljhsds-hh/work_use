@@ -47,6 +47,20 @@ public sealed class CleanItemViewModel : ViewModelBase
         _ => "安全"
     };
 
+    /// <summary>
+    /// 风险色调（"safe" / "caution" / "danger"），给界面挑状态色标用。
+    ///
+    /// 为什么不直接把颜色写在视图模型里：需求 5.3-1 要求颜色只来自设计令牌，
+    /// 而需求 5.4-3 要求"风险文案红色强调"——两边结合的做法就是视图模型只给**语义**（tone），
+    /// 具体色值由 XAML 的 DataTrigger 映射到 HC 语义色（安全/Danger/Warning）。
+    /// </summary>
+    public string RiskTone => Risk switch
+    {
+        ItemRisk.Dangerous => "danger",
+        ItemRisk.Caution => "caution",
+        _ => "safe"
+    };
+
     public ItemRisk Risk => Item.Risk;
 
     public CleanActionKind ActionKind => Item.ActionKind;
