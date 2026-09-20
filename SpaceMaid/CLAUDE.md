@@ -192,7 +192,7 @@ dotnet test Code/tests/SpaceMaid.Core.Tests/SpaceMaid.Core.Tests.csproj
   - `Code/src/SpaceMaid.App/Assets/app.ico`：与 `SpaceMaid.App.csproj` 的 `<ApplicationIcon>` 配套（**勿手工编辑**，改设计就改脚本参数重新生成）
   - `Code/Directory.Build.props`：解决方案级构建属性，**仅 Release** 生效 `DebugType=none` / `DebugSymbols=false`。原因是 `SpaceMaid.Core.pdb` 会被拷进 publish 目录，让"一个 exe 免安装"当场破功；加入后 publish 目录只剩 `SpaceMaid.exe`
   - `Code/scripts/smoke-ui.ps1`：界面冒烟脚本，用 dotnet 宿主加载 `SpaceMaid.dll`（**绕开 `requireAdministrator` 的 apphost，避免无人值守时卡在 UAC**），启动后 3 秒内枚举该进程顶层窗口按标题判定。实测 PASS：匹配到标题"权限不足"，退出码 0，无进程残留。它从不点击任何按钮，所以不可能触发清理动作
-- **唯一待办**：`Code/tests/SpaceMaid.Core.Tests/Execution/DismComponentCleanupTests.cs` **仍未创建**（实施计划点名的 `DismComponentCleanupTests.Should_not_use_reset_base`）。目前"DISM 参数不含重置基线"这条由 `HibernateGateTests` 的同名断言 + `Architecture/StaticSafetyTests.cs` 的源码级断言共同覆盖，所以不变量本身没有裸奔，但实施计划列表上这一项确实还空着
+- **代码侧没有遗留待办**。实施计划点名的 `DismComponentCleanupTests.Should_not_use_reset_base` 其实**早就存在**：类定义在 `Code/tests/SpaceMaid.Core.Tests/Execution/HibernateGateTests.cs`（同一文件里两个类），对应用例是 `Should_use_fixed_official_command_only`——断言实际下发的命令等于常量、且 `DismComponentCleanup.Arguments` 不含重置基线开关。与实施计划的**唯一差异是文件名**（计划里写的是独立文件 `DismComponentCleanupTests.cs`），**不是"测试缺失"**；本文档与测试报告此前把它记成"尚未创建"，已更正（测试报告 G-6）
 - **仍未在真机执行过真实清理**（需求 3.9：工具只出清单，用户审阅后自己执行，工具再复核）。所有实测都停在 dry-run 与复核这一侧——**任何地方都不要写成"已验证清理成功"**；需要"清理有效"的证据就必须先有一次真实人工清理
 - `SpaceMaid.App`、`SpaceMaid.App.Tests` 与 `SpaceMaid.Core` 的部分文件正被另一路并发改动；**改这些目录前先看 `git status`**，不要假设工作区等于 HEAD
 
