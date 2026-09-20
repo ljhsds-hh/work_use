@@ -54,6 +54,12 @@ public sealed record ExecutionOptions(
     /// <summary>隔离区实际存储根：&lt;用户选择的目录&gt;\SpaceMaid\Quarantine（需求 3.4-2 不污染用户目录结构）。</summary>
     public string QuarantineRoot =>
         System.IO.Path.Combine(QuarantinePath, "SpaceMaid", "Quarantine");
+
+    /// <summary>
+    /// 用户是否已通过休眠项的**授权闸门**（需求 3.8）。
+    /// 默认 false：没有显式授权时，休眠项一律不执行——本字段不由任何配置文件驱动。
+    /// </summary>
+    public bool AuthorizeHibernate { get; init; }
 }
 
 /// <summary>单项执行结果。</summary>
