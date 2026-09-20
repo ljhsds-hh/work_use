@@ -180,10 +180,10 @@ dotnet test Code/tests/SpaceMaid.Core.Tests/SpaceMaid.Core.Tests.csproj
 ## 当前工程状态（写文档时的真实情况）
 
 - 已完成：`SpaceMaid.Core` 全部内核能力（安全底座、目录闭集、扫描、隔离区、执行器、报告、特殊项、设置、日志、组合根 `CoreServices`），提交历史见 `git log -- SpaceMaid`
-- 进行中：`SpaceMaid.App` 界面层。`Views/MainWindow.xaml` 目前仍是骨架（注释写着"Task 13 会替换为三段式正式界面"），`App.xaml.cs` 尚未接入 `CoreServices`
-- 尚未创建：`Code/scripts/gen-icon.ps1`、`Code/src/SpaceMaid.App/Assets/app.ico`、`Code/Directory.Build.props`、`Code/tests/SpaceMaid.Core.Tests/Reporting/CliContractTests.cs`、`Execution/DismComponentCleanupTests.cs`（测试方向：`DismComponentCleanupTests.Should_not_use_reset_base` 在实施计划里被点名，但**该测试文件当前不存在**，DISM 参数不含 `/ResetBase` 目前由 `HibernateGateTests` 的同名断言与静态检索测试覆盖）
-- **只读 CLI（`--dry-run` / `--report`）尚未实现**：没有 CLI 工程，`App.xaml.cs` 也不解析参数。需求 9.1 提到 CLI，但它属于独立的界面层任务
-- `SpaceMaid.App` 与 `SpaceMaid.App.Tests` 正被另一路改动；**改这两个目录前先看 `git status`**
+- 界面 `SpaceMaid.App`：**正在收尾**。`App.xaml.cs` 已接入 `CoreServices`（启动编排：创建内核 → `Prepare()` 启动自检 → 组装平台服务 → 建 `MainViewModel` → 显示主窗），`ViewModels/`（`MainViewModel`、`CleanItemViewModel`、`SettingsViewModel`）与 `Views/`（`MainWindow`、`SettingsWindow`）已就位，`Themes/DesignTokens.xaml` 收敛设计令牌
+- **只读 CLI 位于内核**：`SpaceMaid.Core/Cli/`（`CliRunner`、`CliOptions`），支持 `--dry-run`（扫描 + 导出清单）与 `--report`（读回清单 + 复核报告）。设计决策 D-2 说明 CLI 内置于 App.exe，但**当前 `App.xaml.cs` 尚未解析命令行参数**，因此 CLI 目前只能通过 `CliRunner` 直接调用（内核级）；"任何删除动作都只能在 GUI 里由用户点击触发"这条约束不变
+- 尚未创建：`Code/scripts/gen-icon.ps1`、`Code/src/SpaceMaid.App/Assets/app.ico`、`Code/Directory.Build.props`、`Execution/DismComponentCleanupTests.cs`（实施计划点名的 `DismComponentCleanupTests.Should_not_use_reset_base`；DISM 参数不含开关目前由 `HibernateGateTests` 的同名断言与静态检索测试覆盖）
+- `SpaceMaid.App`、`SpaceMaid.App.Tests` 与 `SpaceMaid.Core` 的部分文件正被另一路并发改动；**改这些目录前先看 `git status`**，不要假设工作区等于 HEAD
 
 ## 构建与发布
 
