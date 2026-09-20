@@ -25,6 +25,18 @@ public enum CliMode
 /// </summary>
 public sealed record CliOptions(CliMode Mode, string? OutputDirectory, string? ManifestDirectory, string Message)
 {
+    /// <summary>
+    /// 是否是"用法错误"（识别不了的参数、缺值、或用了明确禁止的开关）。
+    ///
+    /// 为什么要单独一个属性：`Mode == None` 有两种含义——"没给参数，正常开界面"和"参数不合法"。
+    /// 调用方（App 启动分支）必须能区分：**带了参数却不合法时绝不能静默回落到开界面**，
+    /// 否则一次手滑的 `--clean` 会变成"打开工具并顺带做启动维护（删到期的隔离批次）"。
+    /// </summary>
+    public bool IsUsageError => Mode == CliMode.None && !string.IsNullOrEmpty(Message);
+
+    /// <summary>本次是否是一次命令行调用（给了参数就算）。</summary>
+    public static bool IsCommandLineInvocation(IReadOnlyList<string>? args) => args is { Count: > 0 };
+
     /// <summary>本工具**刻意不提供**的命令行开关（出现即拒绝，并给出解释）。</summary>
     public static readonly IReadOnlyList<string> ForbiddenSwitches = new[]
     {

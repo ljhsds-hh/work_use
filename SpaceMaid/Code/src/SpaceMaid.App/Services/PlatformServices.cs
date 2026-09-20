@@ -183,7 +183,10 @@ public sealed class CoreServicesBridge(CoreServices services) : ICoreBridge
     public ManifestRowIndex BuildManifestIndex(CleanPlan plan, string directory) =>
         ManifestWriter.BuildIndex(plan, directory);
 
-    public ManifestRowIndex ReadManifest(string directory) => ManifestReader.Read(directory);
+    // 清单解析统一走内核（此处不再重复实现一份 csv 解析器）；读不出来就抛一句人话，由 ViewModel 捕获提示。
+    public ManifestRowIndex ReadManifest(string directory) =>
+        ManifestFiles.Read(directory)
+        ?? throw new InvalidOperationException($"清单目录不可读或被改动过（{directory}）。请重新导出一份清单再复核。");
 
     // 还原走内核 QuarantineService.Restore：冲突不覆盖、目标路径过禁止清单校验都在内核里完成，
     // 界面只负责"问一句、转一道、把结果念给用户听"。

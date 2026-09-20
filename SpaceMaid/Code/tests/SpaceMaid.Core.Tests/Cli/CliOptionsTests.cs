@@ -106,4 +106,25 @@ public class CliOptionsTests
         Assert.Contains("--clean", CliOptions.ForbiddenSwitches);
         Assert.Contains("--force", CliOptions.ForbiddenSwitches);
     }
+
+    [Fact]
+    public void Usage_error_must_be_distinguishable_from_no_arguments()
+    {
+        // 这两者 Mode 都是 None，但含义完全不同：前者必须报错退出，后者才是正常开界面
+        Assert.True(CliOptions.Parse(new[] { "--clean" }).IsUsageError);
+        Assert.True(CliOptions.Parse(new[] { "--nonsense" }).IsUsageError);
+        Assert.True(CliOptions.Parse(new[] { "--report" }).IsUsageError);
+
+        Assert.False(CliOptions.Parse(Array.Empty<string>()).IsUsageError);
+        Assert.False(CliOptions.Parse(new[] { "--dry-run" }).IsUsageError);
+        Assert.False(CliOptions.Parse(new[] { "--help" }).IsUsageError);
+    }
+
+    [Fact]
+    public void Command_line_invocation_should_be_detected_by_presence_of_arguments()
+    {
+        Assert.False(CliOptions.IsCommandLineInvocation(Array.Empty<string>()));
+        Assert.False(CliOptions.IsCommandLineInvocation(null));
+        Assert.True(CliOptions.IsCommandLineInvocation(new[] { "--dry-run" }));
+    }
 }

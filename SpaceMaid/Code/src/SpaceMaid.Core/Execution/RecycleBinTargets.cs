@@ -157,28 +157,68 @@ public sealed class RecycleBinTargets : IRecycleBinScanner
 
         foreach (var payload in files.Where(f => Path.GetFileName(f).StartsWith("$R", StringComparison.OrdinalIgnoreCase)))
         {
-            var suffix = Path.GetFileName(payload)[2..];
-            var metadataPath = metadata.FirstOrDefault(m =>
-                Path.GetFileName(m)[2..].Equals(suffix, StringComparison.OrdinalIgnoreCase));
-
-            if (metadataPath is null)
+            var pair = ResolvePair(payload, metadata);
+            if (pair is null)
             {
-                _log.Warn($"回收站条目缺少 $I 元数据，已跳过：{payload}");
                 continue;
             }
-
-            if (!TryReadOriginalPath(_fileSystem, metadataPath, out var originalPath, out var error))
-            {
-                _log.Warn($"回收站条目元数据无法解析，已跳过：{metadataPath}（{error}）");
-                continue;
-            }
-
-            _log.Info($"回收站条目：{originalPath} -> {payload}");
 
             // 元数据与实体文件都要搬走，还原时才能成对放回
-            yield return ToScanFile(metadataPath);
+            yield return ToScanFile(pair.Value.MetadataPath);
             yield return ToScanFile(payload);
         }
+
+        // 被删除的**文件夹**在回收站里同样是一对 $I/$R，只不过 $R 是目录而不是文件
+        // （对抗式评审 F-17：此前只枚举文件，导致"回收站里被删掉的文件夹"整类被忽略）。
+        // 这里把目录里的文件逐个列出——执行器只搬文件，空目录留在回收站里无害。
+        foreach (var payloadDirectory in _fileSystem.EnumerateDirectories(sidDirectory))
+        {
+            var name = Path.GetFileName(payloadDirectory);
+            if (!name.StartsWith("$R", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var pair = ResolvePair(payloadDirectory, metadata);
+            if (pair is null)
+            {
+                continue;
+            }
+
+            _log.Info($"回收站条目（文件夹）：{pair.Value.OriginalPath} -> {payloadDirectory}");
+
+            yield return ToScanFile(pair.Value.MetadataPath);
+
+            foreach (var file in _fileSystem.EnumerateFiles(payloadDirectory, "*", recurse: true))
+            {
+                yield return ToScanFile(file);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 把 <c>$R&lt;后缀&gt;</c> 与其配对的 <c>$I&lt;后缀&gt;</c> 元数据对上；对不上或元数据读不出来时返回 null
+    /// （看不懂的条目一律不动）。
+    /// </summary>
+    private (string MetadataPath, string OriginalPath)? ResolvePair(string payloadPath, List<string> metadataFiles)
+    {
+        var suffix = Path.GetFileName(payloadPath)[2..];
+        var metadataPath = metadataFiles.FirstOrDefault(candidate =>
+            Path.GetFileName(candidate)[2..].Equals(suffix, StringComparison.OrdinalIgnoreCase));
+
+        if (metadataPath is null)
+        {
+            _log.Warn($"回收站条目缺少 $I 元数据，已跳过：{payloadPath}");
+            return null;
+        }
+
+        if (!TryReadOriginalPath(_fileSystem, metadataPath, out var originalPath, out var error))
+        {
+            _log.Warn($"回收站条目元数据无法解析，已跳过：{metadataPath}（{error}）");
+            return null;
+        }
+
+        return (metadataPath, originalPath);
     }
 
     private ScanFile ToScanFile(string path) =>

@@ -116,6 +116,43 @@ public class RecycleBinTargetsTests
     }
 
     [Fact]
+    public void Should_include_files_inside_deleted_folders()
+    {
+        using var root = new TempRoot();
+        var systemRoot = Path.Combine(root.Path, "sysroot", RecycleBinTargets.RecycleBinFolderName);
+        var sidDirectory = Path.Combine(systemRoot, "S-1-5-21-1");
+        var deletedFolder = Path.Combine(sidDirectory, "$RDIR1");
+        Directory.CreateDirectory(Path.Combine(deletedFolder, "sub"));
+
+        File.WriteAllText(Path.Combine(deletedFolder, "outer.txt"), "outer");
+        File.WriteAllText(Path.Combine(deletedFolder, "sub", "inner.txt"), "inner");
+        WriteMetadata(Path.Combine(sidDirectory, "$IDIR1"), @"C:\Users\test\MyFolder");
+
+        var scanner = new RecycleBinTargets(new WindowsFileSystem(), new[] { new RecycleBinRoot(systemRoot, true) });
+        var files = scanner.Scan(includeOtherDrives: false);
+
+        // 元数据 + 目录里的两个文件（含子目录）
+        Assert.Equal(3, files.Count);
+        Assert.Contains(files, f => f.Path.EndsWith("outer.txt", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(files, f => f.Path.EndsWith("inner.txt", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(files, f => f.Path.EndsWith("$IDIR1", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Should_skip_deleted_folder_without_metadata()
+    {
+        using var root = new TempRoot();
+        var systemRoot = Path.Combine(root.Path, "sysroot", RecycleBinTargets.RecycleBinFolderName);
+        var sidDirectory = Path.Combine(systemRoot, "S-1-5-21-1");
+        Directory.CreateDirectory(Path.Combine(sidDirectory, "$RORPHAN"));
+        File.WriteAllText(Path.Combine(sidDirectory, "$RORPHAN", "a.txt"), "a");
+
+        var scanner = new RecycleBinTargets(new WindowsFileSystem(), new[] { new RecycleBinRoot(systemRoot, true) });
+
+        Assert.Empty(scanner.Scan(includeOtherDrives: false));
+    }
+
+    [Fact]
     public void Should_build_system_root_from_environment()
     {
         var roots = RecycleBinTargets.BuildRoots(new ExecutionFakeEnvironment(), new[] { @"D:\" });
