@@ -1,0 +1,26 @@
+<Application x:Class="CodeMemo.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!--
+                    HandyControl 皮肤入口（3.5.1 没有 ThemeManager）：hc:Theme 内部自己挂
+                    「颜色字典 + 样式字典」，运行时改它的 Skin 即可整体换肤（见 WindowsAppearanceService）。
+                -->
+                <hc:Theme Name="HandyTheme" Skin="Default" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!--
+                字号资源：界面全部用 DynamicResource 引用，改这里（或运行时代码改同名 key）
+                就能整体放大缩小，不用碰每个控件。
+            -->
+            <sys:Double x:Key="CodeMemoFontSizeBadge">11</sys:Double>
+            <sys:Double x:Key="CodeMemoFontSizeSmall">12</sys:Double>
+            <sys:Double x:Key="CodeMemoFontSizeBody">13.5</sys:Double>
+            <sys:Double x:Key="CodeMemoFontSizeTitle">18</sys:Double>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

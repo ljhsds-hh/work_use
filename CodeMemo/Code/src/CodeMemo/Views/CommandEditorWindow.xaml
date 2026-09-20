@@ -1,0 +1,76 @@
+<Window x:Class="CodeMemo.Views.CommandEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:hc="https://handyorg.github.io/handycontrol"
+        Title="{Binding EditorTitle}"
+        Width="560" Height="520" MinWidth="480" MinHeight="440"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource RegionBrush}"
+        FontFamily="Microsoft YaHei UI">
+    <Grid Margin="24,16,24,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题 -->
+        <hc:TextBox Grid.Row="0" hc:InfoElement.Title="标题" hc:InfoElement.Placeholder="一句话说清这条命令干什么"
+                    Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}"
+                    Margin="0,0,0,12" />
+
+        <!-- 分类与分组 -->
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <ComboBox Grid.Column="0" hc:InfoElement.Title="大分类"
+                      ItemsSource="{Binding Categories}"
+                      SelectedItem="{Binding Category}" />
+            <ComboBox Grid.Column="2" hc:InfoElement.Title="子分组"
+                      IsEditable="True"
+                      ItemsSource="{Binding GroupCandidates}"
+                      Text="{Binding Group, UpdateSourceTrigger=PropertyChanged}"
+                      hc:InfoElement.Placeholder="可输入新分组" />
+        </Grid>
+
+        <!-- 命令 -->
+        <hc:TextBox Grid.Row="3" hc:InfoElement.Title="命令（可替换参数用 &lt;尖括号&gt; 标注）"
+                    hc:InfoElement.Placeholder="例：git switch -c &lt;新分支名&gt;"
+                    Text="{Binding Command, UpdateSourceTrigger=PropertyChanged}"
+                    AcceptsReturn="True"
+                    TextWrapping="Wrap"
+                    VerticalContentAlignment="Top"
+                    VerticalScrollBarVisibility="Auto"
+                    Margin="0,0,0,12" />
+
+        <!-- 备注 -->
+        <hc:TextBox Grid.Row="4" hc:InfoElement.Title="备注（用途 / 场景 / 避坑）"
+                    hc:InfoElement.Placeholder="这条命令什么时候用？有什么要注意的坑？"
+                    Text="{Binding Note, UpdateSourceTrigger=PropertyChanged}"
+                    AcceptsReturn="True"
+                    TextWrapping="Wrap"
+                    Height="110"
+                    VerticalContentAlignment="Top"
+                    VerticalScrollBarVisibility="Auto"
+                    Margin="0,0,0,12" />
+
+        <TextBlock Grid.Row="5" Text="* 标题、命令、大分类、子分组为必填"
+                   FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}"
+                   Margin="0,0,0,12" />
+
+        <!-- 操作按钮 -->
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="取消" Width="88" IsCancel="True" Margin="0,0,12,0" />
+            <Button Content="保存" Width="88" Style="{StaticResource ButtonPrimary}"
+                    Click="OnSaveClick" IsDefault="True" />
+        </StackPanel>
+    </Grid>
+</Window>

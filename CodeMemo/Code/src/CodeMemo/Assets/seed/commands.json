@@ -1,0 +1,540 @@
+{
+  "SchemaVersion": 1,
+  "Commands": [
+    {
+      "Id": "ps-dir-01", "Category": "PowerShell", "Group": "文件与目录",
+      "Title": "递归列出目录下所有文件（含大小）",
+      "Command": "Get-ChildItem <目录路径> -Recurse -File | Sort-Object Length -Descending | Select-Object FullName, @{n='SizeMB';e={[math]::Round($_.Length/1MB,2)}} -First 20",
+      "Note": "列出目录下最大的 20 个文件。排查磁盘占用常用；-File 只列文件跳过目录；数量改 -First <N> 即可。"
+    },
+    {
+      "Id": "ps-dir-02", "Category": "PowerShell", "Group": "文件与目录",
+      "Title": "查找最近 3 天内修改过的文件",
+      "Command": "Get-ChildItem <目录路径> -Recurse -File | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-3) } | Sort-Object LastWriteTime -Descending",
+      "Note": "排查“刚才谁改了文件”很方便。天数改 -3 即可；PS 的 < 与 > 在比较运算中写 -gt / -lt。"
+    },
+    {
+      "Id": "ps-dir-03", "Category": "PowerShell", "Group": "文件与目录",
+      "Title": "新建多级目录（已存在不报错）",
+      "Command": "New-Item -ItemType Directory -Force -Path <目录路径>",
+      "Note": "等价于 mkdir -p。-Force 在目录已存在时不报错也不清空内容，放心用。"
+    },
+    {
+      "Id": "ps-dir-04", "Category": "PowerShell", "Group": "文件与目录",
+      "Title": "复制整个目录树",
+      "Command": "Copy-Item -Path <源目录> -Destination <目标目录> -Recurse -Force",
+      "Note": "目标目录不存在时会自动创建。-Force 覆盖同名只读文件；只想更新差异可加 -Exclude 排除规则。"
+    },
+    {
+      "Id": "ps-dir-05", "Category": "PowerShell", "Group": "文件与目录",
+      "Title": "批量删除指定扩展名的文件",
+      "Command": "Get-ChildItem <目录路径> -Recurse -Filter *.tmp | Remove-Item -Force",
+      "Note": "高危命令：先去掉管道后面的 Remove-Item 预览要删的文件列表，确认无误再执行。"
+    },
+    {
+      "Id": "ps-dir-06", "Category": "PowerShell", "Group": "文件与目录",
+      "Title": "统计目录总大小",
+      "Command": "\"{0:N2} MB\" -f ((Get-ChildItem <目录路径> -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)",
+      "Note": "比右键属性快。-File 必须加，否则把目录本身也算进去导致结果偏大。"
+    },
+    {
+      "Id": "ps-dir-07", "Category": "PowerShell", "Group": "文件与目录",
+      "Title": "重命名当前目录下所有文件扩展名",
+      "Command": "Get-ChildItem *.jpeg | Rename-Item -NewName { $_.Name -replace '\\.jpeg$', '.jpg' }",
+      "Note": "正则里的点要转义（\\.）；-replace 只对输出重命名，不移动文件。先跑替换管道里的表达式看结果更稳妥。"
+    },
+    {
+      "Id": "ps-txt-01", "Category": "PowerShell", "Group": "文本与内容",
+      "Title": "在文件内容中搜索关键字（PS 版 grep）",
+      "Command": "Get-ChildItem <目录路径> -Recurse -Include *.cs,*.xaml | Select-String -Pattern <关键字>",
+      "Note": "Select-String 会输出 文件名:行号:内容。多模式用逗号分隔；加 -CaseSensitive 区分大小写。"
+    },
+    {
+      "Id": "ps-txt-02", "Category": "PowerShell", "Group": "文本与内容",
+      "Title": "查找并替换文件中的文本",
+      "Command": "(Get-Content <文件路径> -Raw) -replace <旧文本>, <新文本> | Set-Content <文件路径> -Encoding UTF8",
+      "Note": "注意括号必须包住 Get-Content，否则 replace 不生效。-Raw 整体读入保证跨行替换正确；替换前建议备份文件。"
+    },
+    {
+      "Id": "ps-txt-03", "Category": "PowerShell", "Group": "文本与内容",
+      "Title": "查看文件开头 / 末尾 N 行",
+      "Command": "Get-Content <文件路径> -TotalCount 20\nGet-Content <文件路径> -Tail 20 -Wait",
+      "Note": "第一行看开头 20 行；第二行看末尾 20 行并持续监听（PS 版 tail -f），盯日志滚动时用 Ctrl+C 退出。"
+    },
+    {
+      "Id": "ps-txt-04", "Category": "PowerShell", "Group": "文本与内容",
+      "Title": "统计文件行数",
+      "Command": "(Get-Content <文件路径> | Measure-Object -Line).Lines",
+      "Note": "空行不计入 Lines；要含空行用 (Get-Content 文件路径).Count。"
+    },
+    {
+      "Id": "ps-txt-05", "Category": "PowerShell", "Group": "文本与内容",
+      "Title": "对象转 JSON / JSON 转对象",
+      "Command": "Get-Process | Select-Object -First 3 | ConvertTo-Json\nGet-Content <json文件> -Raw | ConvertFrom-Json",
+      "Note": "ConvertTo-Json 默认深度 2，嵌套深会截断，加 -Depth 10。ConvertFrom-Json 加 -AsHashtable 便于按键取值。"
+    },
+    {
+      "Id": "ps-proc-01", "Category": "PowerShell", "Group": "进程与服务",
+      "Title": "按名称查找进程",
+      "Command": "Get-Process | Where-Object { $_.ProcessName -like '*<关键字>*' } | Select-Object Id, ProcessName, Path",
+      "Note": "Path 能看到进程实际所在位置，排查同名进程是否来自预期目录时很有用。"
+    },
+    {
+      "Id": "ps-proc-02", "Category": "PowerShell", "Group": "进程与服务",
+      "Title": "结束进程",
+      "Command": "Stop-Process -Name <进程名> -Force",
+      "Note": "高危命令：按名称结束会命中所有同名进程。任务管理器杀不掉时用它；系统关键进程（如 explorer）误杀会黑屏。"
+    },
+    {
+      "Id": "ps-proc-03", "Category": "PowerShell", "Group": "进程与服务",
+      "Title": "查看端口被哪个进程占用",
+      "Command": "Get-NetTCPConnection -LocalPort <端口号> -State Listen | Select-Object LocalPort, OwningProcess, @{n='ProcessName';e={(Get-Process -Id $_.OwningProcess).ProcessName}}",
+      "Note": "“端口被占用”报错的第一排查命令。State Listen 只看监听；去掉该参数可看所有连接状态。"
+    },
+    {
+      "Id": "ps-proc-04", "Category": "PowerShell", "Group": "进程与服务",
+      "Title": "结束占用指定端口的进程",
+      "Command": "Get-NetTCPConnection -LocalPort <端口号> -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }",
+      "Note": "高危命令：先跑上一条确认占用者是谁再执行，避免误杀系统服务。"
+    },
+    {
+      "Id": "ps-proc-05", "Category": "PowerShell", "Group": "进程与服务",
+      "Title": "查看服务状态",
+      "Command": "Get-Service | Where-Object { $_.DisplayName -like '*<关键字>*' }",
+      "Note": "Status 显示 Running / Stopped；要看服务对应程序路径改用 Get-CimInstance Win32_Service。"
+    },
+    {
+      "Id": "ps-proc-06", "Category": "PowerShell", "Group": "进程与服务",
+      "Title": "启动 / 停止 / 重启服务",
+      "Command": "Start-Service <服务名>\nStop-Service <服务名> -Force\nRestart-Service <服务名> -Force",
+      "Note": "需要管理员权限的 PowerShell 窗口。-Force 停止服务时同时停止依赖它的服务。"
+    },
+    {
+      "Id": "ps-net-01", "Category": "PowerShell", "Group": "网络诊断",
+      "Title": "测试主机连通性（PS 版 ping）",
+      "Command": "Test-Connection <主机名或IP> -Count 4",
+      "Note": "比 ping 输出规整；内网禁 ICMP 时会全失败，此时改用下一条测端口连通性。"
+    },
+    {
+      "Id": "ps-net-02", "Category": "PowerShell", "Group": "网络诊断",
+      "Title": "测试端口连通性（telnet 替代）",
+      "Command": "Test-NetConnection <主机名或IP> -Port <端口号>",
+      "Note": "看 TcpTestSucceeded: True 即通。防火墙拦截、服务未启动都能靠它定位；Win10+ 自带无需装 telnet 客户端。"
+    },
+    {
+      "Id": "ps-net-03", "Category": "PowerShell", "Group": "网络诊断",
+      "Title": "DNS 解析查询",
+      "Command": "Resolve-DnsName <域名>",
+      "Note": "看 nslookup 的结果但格式更好读；加 -Type CNAME / -Server <DNS服务器> 可查指定记录类型或指定 DNS。"
+    },
+    {
+      "Id": "ps-net-04", "Category": "PowerShell", "Group": "网络诊断",
+      "Title": "请求网页 / 接口（curl 替代）",
+      "Command": "Invoke-WebRequest -Uri <URL> -UseBasicParsing",
+      "Note": "看 StatusCode 与 Content；下载文件加 -OutFile <保存路径>。内网自签证书报错时可加 -SkipCertificateCheck（PS 6+）。"
+    },
+    {
+      "Id": "ps-net-05", "Category": "PowerShell", "Group": "网络诊断",
+      "Title": "调用 JSON 接口",
+      "Command": "(Invoke-RestMethod -Uri <URL> -Method Get) | ConvertTo-Json -Depth 10",
+      "Note": "Invoke-RestMethod 自动反序列化 JSON 为对象，直接取字段；POST 传体用 -Method Post -Body ($obj | ConvertTo-Json) -ContentType 'application/json'。"
+    },
+    {
+      "Id": "ps-net-06", "Category": "PowerShell", "Group": "网络诊断",
+      "Title": "查看本机 IP 地址",
+      "Command": "Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -ne '127.0.0.1' } | Select-Object InterfaceAlias, IPAddress",
+      "Note": "过滤掉回环地址；InterfaceAlias 能看出是哪块网卡（以太网 / WiFi / VPN 虚拟网卡）。"
+    },
+    {
+      "Id": "ps-sys-01", "Category": "PowerShell", "Group": "系统信息",
+      "Title": "查看 PowerShell 版本",
+      "Command": "$PSVersionTable",
+      "Note": "PSVersion 5.x 是 Windows 内置版，7.x 是跨平台版，两者语法略有差异；排查脚本不兼容先看这里。"
+    },
+    {
+      "Id": "ps-sys-02", "Category": "PowerShell", "Group": "系统信息",
+      "Title": "查看磁盘剩余空间",
+      "Command": "Get-Volume | Where-Object DriveLetter | Select-Object DriveLetter, FileSystemLabel, @{n='FreeGB';e={[math]::Round($_.SizeRemaining/1GB,1)}}, @{n='TotalGB';e={[math]::Round($_.Size/1GB,1)}}",
+      "Note": "比 Get-PSDrive 多出卷标信息；网络驱动器不在 Get-Volume 结果里，需要时用 Get-PSDrive。"
+    },
+    {
+      "Id": "ps-sys-03", "Category": "PowerShell", "Group": "系统信息",
+      "Title": "查看 / 设置环境变量（仅当前会话）",
+      "Command": "Get-ChildItem Env:\n$env:<变量名> = <值>",
+      "Note": "设置只对当前窗口生效，关窗即失；要永久生效用 [Environment]::SetEnvironmentVariable(名称, 值, 'User')。调试时临时切 PATH、连接串就用会话级。"
+    },
+    {
+      "Id": "ps-sys-04", "Category": "PowerShell", "Group": "系统信息",
+      "Title": "查看系统开机时长",
+      "Command": "(Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime",
+      "Note": "输出 Days.Hours Minutes 形式的时间差；排查“机器是不是被重启过”比事件日志快。"
+    },
+    {
+      "Id": "ps-sys-05", "Category": "PowerShell", "Group": "系统信息",
+      "Title": "查看已安装程序列表",
+      "Command": "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* | Where-Object DisplayName | Select-Object DisplayName, DisplayVersion, InstallDate | Sort-Object DisplayName",
+      "Note": "读注册表卸载入口；64 位机器上 32 位程序在 Wow6432Node 路径下，查不到时换路径再试。"
+    },
+    {
+      "Id": "ps-zip-01", "Category": "PowerShell", "Group": "压缩与归档",
+      "Title": "压缩目录为 zip",
+      "Command": "Compress-Archive -Path <源目录>\\* -DestinationPath <输出.zip> -Force",
+      "Note": "Path 指到目录本身会把整个目录打包进去，加 \\* 是只打包目录内内容；zip 内中文文件名在其他工具可能乱码。"
+    },
+    {
+      "Id": "ps-zip-02", "Category": "PowerShell", "Group": "压缩与归档",
+      "Title": "解压 zip",
+      "Command": "Expand-Archive -Path <压缩包.zip> -DestinationPath <目标目录> -Force",
+      "Note": "-Force 覆盖已存在的同名文件；目标目录不存在会自动创建。只解包内部分文件用 -Filter。"
+    },
+    {
+      "Id": "ps-sec-01", "Category": "PowerShell", "Group": "脚本与安全",
+      "Title": "查看脚本执行策略",
+      "Command": "Get-ExecutionPolicy -List",
+      "Note": "默认 Restricted 挡住一切 .ps1；优先级：MachinePolicy > UserPolicy > CurrentUser > LocalMachine，最右侧生效的那行才是实际策略。"
+    },
+    {
+      "Id": "ps-sec-02", "Category": "PowerShell", "Group": "脚本与安全",
+      "Title": "允许运行本地脚本",
+      "Command": "Set-ExecutionPolicy RemoteSigned -Scope CurrentUser",
+      "Note": "RemoteSigned = 本地脚本随意跑，网络下载脚本必须签名，是个人开发机推荐档位。公司组策略下发时此命令会报错，属正常限制。"
+    },
+    {
+      "Id": "ps-sec-03", "Category": "PowerShell", "Group": "脚本与安全",
+      "Title": "以管理员身份打开新 PowerShell 窗口",
+      "Command": "Start-Process powershell -Verb RunAs",
+      "Note": "弹 UAC 确认框；要直接执行命令加 -ArgumentList '-NoExit -Command <命令>'。需要管理员的操作（装服务、改系统目录）都用它。"
+    },
+    {
+      "Id": "ps-sec-04", "Category": "PowerShell", "Group": "脚本与安全",
+      "Title": "绕过策略执行单个脚本",
+      "Command": "powershell -ExecutionPolicy Bypass -File <脚本路径>",
+      "Note": "只影响这一次执行，不改全局策略，适合跑别人给的临时脚本；前提是你审过脚本内容。"
+    },
+    {
+      "Id": "ps-tip-01", "Category": "PowerShell", "Group": "脚本与安全",
+      "Title": "测量命令执行耗时",
+      "Command": "Measure-Command { <要计时的命令> }",
+      "Note": "花括号内输出不显示（被吞掉），只返回耗时；既要看输出又要计时，在原命令前后用 Get-Date 手工打点。"
+    },
+    {
+      "Id": "ps-tip-02", "Category": "PowerShell", "Group": "脚本与安全",
+      "Title": "管道输出直接进剪贴板",
+      "Command": "<任意命令> | Set-Clipboard",
+      "Note": "例：Get-Content 清单.txt | Set-Clipboard 直接把内容复制走；配合本工具“复制”按钮之外的临时取数很顺手。"
+    },
+    {
+      "Id": "ps-tip-03", "Category": "PowerShell", "Group": "脚本与安全",
+      "Title": "查看并清除命令历史",
+      "Command": "Get-History\nClear-History",
+      "Note": "Get-History 只看当前会话；PSReadLine 的跨会话历史在 %AppData%\\Microsoft\\Windows\\PowerShell\\PSReadLine 下，贴过密码记得清。"
+    },
+
+    {
+      "Id": "git-init-01", "Category": "Git", "Group": "配置与初始化",
+      "Title": "初始化新仓库",
+      "Command": "git init",
+      "Note": "在当前目录生成 .git；想直接指定分支名可 git init -b main，避免首次提交后还要改名。"
+    },
+    {
+      "Id": "git-init-02", "Category": "Git", "Group": "配置与初始化",
+      "Title": "克隆仓库（含子模块）",
+      "Command": "git clone <仓库地址>\ngit clone --recurse-submodules <仓库地址>",
+      "Note": "克隆后发现目录空的多半是忘了 --recurse-submodules；已克隆完的补一下：git submodule update --init --recursive。"
+    },
+    {
+      "Id": "git-init-03", "Category": "Git", "Group": "配置与初始化",
+      "Title": "设置全局用户名与邮箱",
+      "Command": "git config --global user.name \"<名字>\"\ngit config --global user.email \"<邮箱>\"",
+      "Note": "只对某仓库生效就去掉 --global 在仓库内执行（公司邮箱与个人邮箱分机器/分目录管理的场景）。"
+    },
+    {
+      "Id": "git-init-04", "Category": "Git", "Group": "配置与初始化",
+      "Title": "查看全部生效配置及来源",
+      "Command": "git config --list --show-origin",
+      "Note": "--show-origin 能看出每个配置来自哪个文件（系统 / 全局 / 仓库），排查“配置不生效”必看。"
+    },
+    {
+      "Id": "git-init-05", "Category": "Git", "Group": "配置与初始化",
+      "Title": "保存远端凭据避免重复输密码",
+      "Command": "git config --global credential.helper manager",
+      "Note": "Windows 上用 Git Credential Manager；输入一次后存入凭据管理器。换密码 / 换账号后要去“控制面板-凭据管理器”删旧条目。"
+    },
+    {
+      "Id": "git-base-01", "Category": "Git", "Group": "基础操作",
+      "Title": "查看工作区状态（简洁模式）",
+      "Command": "git status -sb",
+      "Note": "第一行显示当前分支与领先/落后远端几个提交，比不加 -s 的长输出高效；日常就用这条。"
+    },
+    {
+      "Id": "git-base-02", "Category": "Git", "Group": "基础操作",
+      "Title": "暂存改动（全部 / 交互式选择）",
+      "Command": "git add -A\ngit add -p",
+      "Note": "-A 收录全部（含删除与新文件）；-p 逐块确认，想提交干净拆分的 commit 时用它，q 退出。"
+    },
+    {
+      "Id": "git-base-03", "Category": "Git", "Group": "基础操作",
+      "Title": "提交",
+      "Command": "git commit -m \"<提交说明>\"",
+      "Note": "说明写“为什么改”比“改了什么”更有价值；同时把未暂存内容一起提交可加 -a（仅对已跟踪文件生效）。"
+    },
+    {
+      "Id": "git-base-04", "Category": "Git", "Group": "基础操作",
+      "Title": "修改最后一次提交（追加文件 / 改说明）",
+      "Command": "git commit --amend",
+      "Note": "高危：会重写提交哈希。已推送到共享分支的提交禁用；未推送或纯个人分支才安全。补漏文件先 git add 再 amend。"
+    },
+    {
+      "Id": "git-base-05", "Category": "Git", "Group": "基础操作",
+      "Title": "查看改动内容",
+      "Command": "git diff\ngit diff --staged\ngit diff <commit1> <commit2>",
+      "Note": "第一行看未暂存的，第二行看已暂存待提交的；q 退出翻页视图。看指定文件在末尾加 -- <文件路径>。"
+    },
+    {
+      "Id": "git-base-06", "Category": "Git", "Group": "基础操作",
+      "Title": "从版本控制移除文件但保留本地",
+      "Command": "git rm --cached <文件路径>",
+      "Note": "误把不该入库的文件（bin/obj、密钥）add 过了就用它：远端删掉、本地保留。记得补 .gitignore。"
+    },
+    {
+      "Id": "git-branch-01", "Category": "Git", "Group": "分支操作",
+      "Title": "列出分支",
+      "Command": "git branch\ngit branch -a",
+      "Note": "-a 含远端分支；当前分支带 * 号。本地分支列表太乱时配合 -d 清理。"
+    },
+    {
+      "Id": "git-branch-02", "Category": "Git", "Group": "分支操作",
+      "Title": "创建并切换到新分支",
+      "Command": "git switch -c <新分支名>",
+      "Note": "新分支基于当前 HEAD；要基于指定分支可写 git switch -c <新分支名> origin/<基准分支>。旧版本用 git checkout -b 等价。"
+    },
+    {
+      "Id": "git-branch-03", "Category": "Git", "Group": "分支操作",
+      "Title": "切换分支",
+      "Command": "git switch <分支名>",
+      "Note": "有未提交改动且与目标分支冲突时会被拒绝，先 commit 或 stash；比 checkout 语义更明确，推荐新习惯。"
+    },
+    {
+      "Id": "git-branch-04", "Category": "Git", "Group": "分支操作",
+      "Title": "删除分支",
+      "Command": "git branch -d <分支名>\ngit branch -D <分支名>",
+      "Note": "-d 只删已合并的分支，安全；-D 强删未合并分支，上面的提交会悬空（还可用 reflog 找回）。删完远端还要单独删。"
+    },
+    {
+      "Id": "git-branch-05", "Category": "Git", "Group": "分支操作",
+      "Title": "重命名分支",
+      "Command": "git branch -m <旧分支名> <新分支名>",
+      "Note": "在目标分支上执行时省略旧名即可。分支已推送过的话远端改名见“远程仓库-删除远端分支”。"
+    },
+    {
+      "Id": "git-merge-01", "Category": "Git", "Group": "合并与变基",
+      "Title": "合并分支",
+      "Command": "git merge <要合进来的分支名>",
+      "Note": "在“留在哪”的分支上执行（把别人合进来）。冲突解决后 git add 再 git merge --continue；想放弃整个合并见下一条。"
+    },
+    {
+      "Id": "git-merge-02", "Category": "Git", "Group": "合并与变基",
+      "Title": "放弃合并 / 变基回到合并前",
+      "Command": "git merge --abort\ngit rebase --abort",
+      "Note": "冲突解到一半想整体放弃时用，工作区回到操作前状态；这是“解冲突失败”的后悔药，别硬着头皮乱解。"
+    },
+    {
+      "Id": "git-merge-03", "Category": "Git", "Group": "合并与变基",
+      "Title": "变基（把提交挪到新基底上）",
+      "Command": "git rebase <基准分支>",
+      "Note": "高危：重写提交历史。只对未推送/纯个人分支使用；共享分支变基 = 团队灾难。pull 时想保持线性历史用 git pull --rebase。"
+    },
+    {
+      "Id": "git-merge-04", "Category": "Git", "Group": "合并与变基",
+      "Title": "挑拣单个提交到当前分支",
+      "Command": "git cherry-pick <commit-id>",
+      "Note": "把别的分支上的某一个提交“复印”过来；冲突处理同 merge。连续多个可列多个 id，按时间顺序排列。"
+    },
+    {
+      "Id": "git-undo-01", "Category": "Git", "Group": "撤销回退",
+      "Title": "丢弃工作区未暂存的修改",
+      "Command": "git restore <文件路径>\ngit restore .",
+      "Note": "高危：改动直接消失，无法恢复。执行前先 git status -sb 确认清单；只想暂存起来另存见 stash。"
+    },
+    {
+      "Id": "git-undo-02", "Category": "Git", "Group": "撤销回退",
+      "Title": "把文件移出暂存区（撤销 add）",
+      "Command": "git restore --staged <文件路径>",
+      "Note": "只撤出暂存区，工作区改动原样保留，安全操作。add 错文件的第一反应用这条。"
+    },
+    {
+      "Id": "git-undo-03", "Category": "Git", "Group": "撤销回退",
+      "Title": "撤销最后一次提交但保留改动",
+      "Command": "git reset --soft HEAD~1",
+      "Note": "提交说明写错了 / 漏文件时的首选：改动回到暂存区，重新 add 后再提交。未推送前用，最常用且安全。"
+    },
+    {
+      "Id": "git-undo-04", "Category": "Git", "Group": "撤销回退",
+      "Title": "撤销提交并丢弃全部改动",
+      "Command": "git reset --hard HEAD~1",
+      "Note": "高危：提交和代码一起没。执行前记下当前哈希（git log -1），万一后悔还有 reflog 一条路。"
+    },
+    {
+      "Id": "git-undo-05", "Category": "Git", "Group": "撤销回退",
+      "Title": "本地强制对齐远端指定分支",
+      "Command": "git fetch origin\ngit reset --hard origin/<分支名>",
+      "Note": "高危：本地所有未提交改动和多余提交全部丢弃。“本地改崩了想拉一个干净版本”时用；执行前可 stash 一次保底。"
+    },
+    {
+      "Id": "git-undo-06", "Category": "Git", "Group": "撤销回退",
+      "Title": "撤销已推送的提交（生成反向提交）",
+      "Command": "git revert <commit-id>",
+      "Note": "不改历史、追加一条“抵消提交”，共享分支上撤错改的唯一正确姿势；这是多人协作下与 reset 的本质区别。"
+    },
+    {
+      "Id": "git-undo-07", "Category": "Git", "Group": "撤销回退",
+      "Title": "删除未跟踪的文件与目录",
+      "Command": "git clean -fd\ngit clean -nd",
+      "Note": "高危：先跑 -nd（dry run）预览会删什么，确认后再 -fd 真删。被 .gitignore 忽略的文件还需加 -x 才会删。"
+    },
+    {
+      "Id": "git-undo-08", "Category": "Git", "Group": "撤销回退",
+      "Title": "找回“消失”的提交（救命命令）",
+      "Command": "git reflog\ngit reset --hard <commit-id>",
+      "Note": "reflog 记录 HEAD 的每一次移动，reset 错、rebase 丢、分支强删后都靠它找到原哈希再 reset 回去。默认保留 90 天，越早操作越稳。"
+    },
+    {
+      "Id": "git-remote-01", "Category": "Git", "Group": "远程仓库",
+      "Title": "查看 / 添加远端仓库",
+      "Command": "git remote -v\ngit remote add origin <仓库地址>",
+      "Note": "clone 下来的仓库自带 origin；地址打错了用 git remote set-url origin <新地址> 修正。"
+    },
+    {
+      "Id": "git-remote-02", "Category": "Git", "Group": "远程仓库",
+      "Title": "首次推送并建立跟踪关系",
+      "Command": "git push -u origin <分支名>",
+      "Note": "-u 记住跟踪关系，之后该分支直接 git push / git pull 即可；只对新分支第一次推送需要。"
+    },
+    {
+      "Id": "git-remote-03", "Category": "Git", "Group": "远程仓库",
+      "Title": "安全强制推送",
+      "Command": "git push --force-with-lease origin <分支名>",
+      "Note": "amend / rebase 之后必须强推。用 --force-with-lease 替代 --force：若远端有你没拉过的新提交会被拒绝，防止覆盖同事的推送。"
+    },
+    {
+      "Id": "git-remote-04", "Category": "Git", "Group": "远程仓库",
+      "Title": "拉取远端更新（保持线性历史）",
+      "Command": "git pull --rebase",
+      "Note": "把本地提交挪到远端新提交之后，避免“合并分叉”的提交图；有冲突时解决后 git rebase --continue。"
+    },
+    {
+      "Id": "git-remote-05", "Category": "Git", "Group": "远程仓库",
+      "Title": "只取远端更新不合并，先看差异",
+      "Command": "git fetch origin\ngit diff HEAD origin/<分支名> --stat",
+      "Note": "pull 前先 fetch 看看远端动了什么再决定怎么合，避免盲目合并；--stat 先看涉及哪些文件，去掉看详情。"
+    },
+    {
+      "Id": "git-remote-06", "Category": "Git", "Group": "远程仓库",
+      "Title": "删除远端分支",
+      "Command": "git push origin --delete <分支名>",
+      "Note": "与本地删除相互独立，两边都要删。误删可从远端平台（GitHub/Gitee）的分支恢复页找回。"
+    },
+    {
+      "Id": "git-remote-07", "Category": "Git", "Group": "远程仓库",
+      "Title": "查看远端所有分支引用",
+      "Command": "git ls-remote origin",
+      "Note": "直接连远端查询，不依赖本地缓存的 remote-tracking 分支；怀疑本地远端分支列表过期时用这条。"
+    },
+    {
+      "Id": "git-log-01", "Category": "Git", "Group": "查看历史",
+      "Title": "图形化查看提交历史",
+      "Command": "git log --oneline --graph --all --decorate",
+      "Note": "一屏看清分支拓扑；--all 含所有分支。日常排查“这条提交进没进这个分支”就用它。"
+    },
+    {
+      "Id": "git-log-02", "Category": "Git", "Group": "查看历史",
+      "Title": "查看某个文件的修改历史",
+      "Command": "git log --oneline --follow -- <文件路径>",
+      "Note": "--follow 能追到文件被改名之前的历史，不加则断在改名处；看具体改动在后面加 -p。"
+    },
+    {
+      "Id": "git-log-03", "Category": "Git", "Group": "查看历史",
+      "Title": "按代码内容搜索提交（哪次改的这段）",
+      "Command": "git log -S \"<代码片段>\" --oneline",
+      "Note": "pickaxe：列出使该字符串出现/消失次数变化的提交，比翻 blame 快；配合 -i 忽略大小写。"
+    },
+    {
+      "Id": "git-log-04", "Category": "Git", "Group": "查看历史",
+      "Title": "逐行查看文件最近一次是谁改的",
+      "Command": "git blame -L <起始行>,<结束行> -- <文件路径>",
+      "Note": "只看指定行区间，大文件必备；显示的哈希用 git show <commit-id> 展开看完整提交。"
+    },
+    {
+      "Id": "git-log-05", "Category": "Git", "Group": "查看历史",
+      "Title": "查看某次提交的完整内容",
+      "Command": "git show <commit-id>",
+      "Note": "含提交说明与完整 diff；只看改了哪些文件加 --stat；看合并提交的两侧差异加 -m。"
+    },
+    {
+      "Id": "git-tag-01", "Category": "Git", "Group": "标签",
+      "Title": "列出 / 创建标签",
+      "Command": "git tag\ngit tag -a <标签名> -m \"<说明>\" <commit-id>",
+      "Note": "发版打标用 -a 带说明的附注标签；commit-id 省略则打在当前 HEAD。轻量 tag（不带 -a）只适合临时记位。"
+    },
+    {
+      "Id": "git-tag-02", "Category": "Git", "Group": "标签",
+      "Title": "推送 / 删除标签",
+      "Command": "git push origin <标签名>\ngit push origin --delete <标签名>\ngit tag -d <标签名>",
+      "Note": "git push 默认不推标签，要单独推；--delete 删远端，-d 只删本地。例行发布建议 git push origin --tags。"
+    },
+    {
+      "Id": "git-tag-03", "Category": "Git", "Group": "标签",
+      "Title": "检出某个标签的代码（只读查看）",
+      "Command": "git checkout <标签名>",
+      "Note": "进入 detached HEAD 状态，别在此状态直接提交；要基于它开发就 git switch -c <新分支名> <标签名>。"
+    },
+    {
+      "Id": "git-stash-01", "Category": "Git", "Group": "暂存 stash",
+      "Title": "把当前改动暂存起来",
+      "Command": "git stash push -m \"<备注>\"",
+      "Note": "手头改到一半要切分支修急事时的标准动作；-m 写清楚存了什么，否则两周后 list 里全叫 WIP。含未跟踪文件加 -u。"
+    },
+    {
+      "Id": "git-stash-02", "Category": "Git", "Group": "暂存 stash",
+      "Title": "查看暂存列表",
+      "Command": "git stash list\ngit stash show -p stash@{0}",
+      "Note": "栈结构：最新的是 stash@{0}。show -p 看某一条具体改了什么，确认后再 pop。"
+    },
+    {
+      "Id": "git-stash-03", "Category": "Git", "Group": "暂存 stash",
+      "Title": "恢复暂存的改动",
+      "Command": "git stash pop\ngit stash apply stash@{<序号>}",
+      "Note": "pop = 恢复并从栈中删除；apply 恢复但保留（想应用到多个分支时用）。恢复若冲突，stash 条目不会被删，放心解。"
+    },
+    {
+      "Id": "git-stash-04", "Category": "Git", "Group": "暂存 stash",
+      "Title": "删除暂存条目",
+      "Command": "git stash drop stash@{0}\ngit stash clear",
+      "Note": "高危：drop 删单条、clear 清空全部，删了不像分支还能走 reflog，基本找不回。pop 成功后无需再手动 drop。"
+    },
+    {
+      "Id": "git-tip-01", "Category": "Git", "Group": "实用技巧",
+      "Title": "查看改动涉及的文件统计",
+      "Command": "git diff --stat\ngit log --stat -3",
+      "Note": "code review 前先 --stat 扫一眼规模，再决定逐个看；log --stat 顺带看最近几次提交各动了什么。"
+    },
+    {
+      "Id": "git-tip-02", "Category": "Git", "Group": "实用技巧",
+      "Title": "临时忽略已跟踪文件的本地改动",
+      "Command": "git update-index --skip-worktree <文件路径>\ngit update-index --no-skip-worktree <文件路径>",
+      "Note": "本地配置文件（连接串等）不想每次提交又不能进 .gitignore 时用。坑：远端更新该文件时 pull 会冲突，记得先 --no 恢复。"
+    },
+    {
+      "Id": "git-tip-03", "Category": "Git", "Group": "实用技巧",
+      "Title": "查找引入 Bug 的提交（二分定位）",
+      "Command": "git bisect start\ngit bisect bad\ngit bisect good <已知正常的commit-id>",
+      "Note": "自动二分切换版本，每步你验证后 good/bad 标记，log n 次提交只需 n 步；结束后 git bisect reset 回到原分支。"
+    },
+    {
+      "Id": "git-tip-04", "Category": "Git", "Group": "实用技巧",
+      "Title": "同一仓库同时检出多个分支并行开发",
+      "Command": "git worktree add ../<目录名> <分支名>\ngit worktree list",
+      "Note": "比 clone 两份省磁盘且共享对象库；一个分支同一时刻只能在一个 worktree 检出。用完 git worktree remove <目录名> 清理。"
+    }
+  ]
+}

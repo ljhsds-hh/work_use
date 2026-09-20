@@ -1,0 +1,455 @@
+<Window x:Class="CodeMemo.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:hc="https://handyorg.github.io/handycontrol"
+        xmlns:local="clr-namespace:CodeMemo.Views"
+        Title="CodeMemo 命令速查库"
+        Width="1180" Height="780" MinWidth="980" MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource SecondaryRegionBrush}"
+        FontFamily="Microsoft YaHei UI"
+        FontSize="{DynamicResource CodeMemoFontSizeBody}"
+        Loaded="OnLoaded">
+
+    <!-- 快捷键（Ctrl+F 搜索 / Ctrl+N 新增 / Delete 删除 / Esc 清空搜索）在代码后台 OnKeyDown 处理 -->
+
+    <DockPanel x:Name="RootPanel"
+               hc:Growl.Token="Main"
+               hc:Growl.GrowlParent="True">
+        <!-- 托盘图标：常驻入口（图标在 OnLoaded 里设置，失败也不影响启动） -->
+        <hc:NotifyIcon x:Name="TrayIcon" Text="CodeMemo 命令速查库"
+                       MouseDoubleClick="OnTrayActivate" Click="OnTrayActivate">
+            <hc:NotifyIcon.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="显示 / 隐藏窗口" Click="OnTrayShowHide" />
+                    <MenuItem Header="打开数据目录" Click="OnTrayOpenDataDirectory" />
+                    <Separator />
+                    <MenuItem Header="退出 CodeMemo" Click="OnTrayExit" />
+                </ContextMenu>
+            </hc:NotifyIcon.ContextMenu>
+        </hc:NotifyIcon>
+
+        <!-- ═══════ 顶部工具栏 ═══════ -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource RegionBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+                Padding="16,10">
+            <DockPanel>
+                <!-- 工具名 -->
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="30" Height="30" CornerRadius="6" Background="#348CF6">
+                        <TextBlock Text="&gt;_" Foreground="White" FontWeight="Bold" FontSize="12"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="CodeMemo" FontSize="17" FontWeight="Bold"
+                               VerticalAlignment="Center" Margin="10,0,2,0" />
+                    <TextBlock Text="命令速查库" FontSize="{DynamicResource CodeMemoFontSizeBody}" Opacity="0.6"
+                               VerticalAlignment="Center" Margin="0,2,0,0" />
+                </StackPanel>
+
+                <!-- 右侧操作按钮 -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="新增命令" Style="{StaticResource ButtonPrimary}"
+                            Command="{Binding AddCommand}" Margin="0,0,10,0"
+                            ToolTip="快捷键 Ctrl+N" />
+                    <Button Content="导入" Command="{Binding ImportCommand}" Margin="0,0,10,0" />
+                    <Button Content="导出" Command="{Binding ExportCommand}" Margin="0,0,10,0" />
+                    <Button Content="数据目录" Command="{Binding OpenDataDirectoryCommand}"
+                            ToolTip="在资源管理器里打开数据文件、备份与 settings.json 所在目录" />
+                </StackPanel>
+
+                <!-- 中部搜索框 -->
+                <Grid VerticalAlignment="Center">
+                    <hc:TextBox x:Name="SearchBox" Width="420" HorizontalAlignment="Center"
+                                hc:InfoElement.Placeholder="搜索命令标题 / 内容 / 备注（Ctrl+F 快速定位）"
+                                Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                    <!-- 清除按钮：搜索态显示 -->
+                    <Button Width="22" Height="22" Padding="0" HorizontalAlignment="Right" Margin="0,0,8,0"
+                            Background="Transparent" BorderThickness="0" Content="✕"
+                            Visibility="{Binding IsSearching, Converter={StaticResource Boolean2VisibilityConverter}}"
+                            Command="{Binding ClearSearchCommand}"
+                            ToolTip="清空搜索（Esc）" />
+                </Grid>
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════ 三栏主体 ═══════ -->
+        <Grid Margin="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="228" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="0.9*" MinWidth="330" />
+            </Grid.ColumnDefinitions>
+
+            <!-- ── 左栏：分类树 + 外观 / 常驻偏好 ── -->
+            <Border Grid.Column="0" Background="{DynamicResource RegionBrush}"
+                    CornerRadius="8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <DockPanel Margin="4,8">
+                    <!-- 外观与常驻偏好（放在左下角，不挤工具栏） -->
+                    <StackPanel DockPanel.Dock="Bottom" Margin="12,10,12,4">
+                        <TextBlock Text="外观" FontWeight="Bold" FontSize="{DynamicResource CodeMemoFontSizeSmall}"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,6" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="主题" VerticalAlignment="Center"
+                                       FontSize="{DynamicResource CodeMemoFontSizeSmall}" />
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding ThemeOptions}"
+                                      SelectedItem="{Binding SelectedTheme}" DisplayMemberPath="Label" />
+                        </Grid>
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="字号" VerticalAlignment="Center"
+                                       FontSize="{DynamicResource CodeMemoFontSizeSmall}" />
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding FontSizeOptions}"
+                                      SelectedItem="{Binding SelectedFontSize}" DisplayMemberPath="Label" />
+                        </Grid>
+
+                        <TextBlock Text="常驻" FontWeight="Bold" FontSize="{DynamicResource CodeMemoFontSizeSmall}"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,12,0,6" />
+                        <CheckBox Content="关闭时收进托盘" IsChecked="{Binding MinimizeToTrayEnabled}"
+                                  FontSize="{DynamicResource CodeMemoFontSizeSmall}" />
+                        <CheckBox Content="启用全局热键" IsChecked="{Binding GlobalHotkeyEnabled}"
+                                  FontSize="{DynamicResource CodeMemoFontSizeSmall}" Margin="0,6,0,0"
+                                  ToolTip="{Binding HotkeyText, StringFormat=当前热键：{0}}" />
+                        <!-- 预设组合：点一下即设为全局热键；想用别的点下面「录制」 -->
+                        <ItemsControl ItemsSource="{Binding HotkeyOptions}" Margin="22,6,4,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Margin="0,0,4,4" Padding="6,1" Content="{Binding Label}"
+                                            FontSize="{DynamicResource CodeMemoFontSizeBadge}"
+                                            ToolTip="点一下即设为全局热键"
+                                            Command="{Binding DataContext.SetHotkeyCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding Value}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Content="{Binding HotkeyRecordLabel}" Margin="22,2,0,0" Padding="10,2"
+                                HorizontalAlignment="Left"
+                                Command="{Binding ToggleHotkeyRecordingCommand}"
+                                ToolTip="点一下再按组合键（Esc 取消）" />
+                        <!-- 自定义输入：手输或粘贴写法，回车 / 点应用生效 -->
+                        <Grid Margin="22,6,4,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <hc:TextBox Text="{Binding HotkeyInputText, UpdateSourceTrigger=PropertyChanged}"
+                                        hc:InfoElement.Placeholder="自定义，如 Ctrl+Alt+K"
+                                        FontSize="{DynamicResource CodeMemoFontSizeBadge}"
+                                        ToolTip="手输或粘贴写法后回车 / 点应用">
+                                <hc:TextBox.InputBindings>
+                                    <KeyBinding Key="Return" Command="{Binding ApplyHotkeyInputCommand}" />
+                                </hc:TextBox.InputBindings>
+                            </hc:TextBox>
+                            <Button Grid.Column="1" Content="应用" Margin="4,0,0,0" Padding="8,2"
+                                    Command="{Binding ApplyHotkeyInputCommand}"
+                                    ToolTip="应用输入的组合键" />
+                        </Grid>
+                    </StackPanel>
+
+                    <TextBlock DockPanel.Dock="Top" Text="分类" FontWeight="Bold"
+                               FontSize="{DynamicResource CodeMemoFontSizeBody}"
+                               Margin="12,4,0,8" Foreground="{DynamicResource SecondaryTextBrush}" />
+                    <TreeView x:Name="FilterTree" ItemsSource="{Binding FilterNodes}"
+                              BorderThickness="0" Background="Transparent"
+                              SelectedItemChanged="OnFilterTreeSelectionChanged"
+                              VirtualizingPanel.IsVirtualizing="False">
+                        <TreeView.ItemContainerStyle>
+                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource TreeViewItemBaseStyle}">
+                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                            </Style>
+                        </TreeView.ItemContainerStyle>
+                        <TreeView.ItemTemplate>
+                            <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                <HierarchicalDataTemplate.ItemContainerStyle>
+                                    <Style TargetType="TreeViewItem" BasedOn="{StaticResource TreeViewItemBaseStyle}">
+                                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                    </Style>
+                                </HierarchicalDataTemplate.ItemContainerStyle>
+                                <DockPanel Margin="0,3">
+                                    <Border DockPanel.Dock="Right" CornerRadius="8"
+                                            Background="{DynamicResource SecondaryRegionBrush}"
+                                            Padding="6,1" VerticalAlignment="Center">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Count}" Value="0">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock Text="{Binding Count}" FontSize="{DynamicResource CodeMemoFontSizeBadge}"
+                                                   Foreground="{DynamicResource SecondaryTextBrush}" />
+                                    </Border>
+                                    <TextBlock Text="{Binding Label}" FontSize="{DynamicResource CodeMemoFontSizeBody}"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                </DockPanel>
+                            </HierarchicalDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </DockPanel>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="Transparent" />
+
+            <!-- ── 中栏：快捷复制面板 + 命令列表 ── -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- 快捷复制 Top10：点一下就复制，省掉「搜索→选中→复制」 -->
+                <Border Grid.Row="0" CornerRadius="6" Padding="10,8" Margin="0,0,0,8"
+                        Background="{DynamicResource SecondaryRegionBrush}"
+                        Visibility="{Binding HasQuickPicks, Converter={StaticResource Boolean2VisibilityConverter}}">
+                    <StackPanel>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Padding="8,2" MinWidth="72"
+                                    Content="{Binding QuickPickModeLabel}"
+                                    Command="{Binding ToggleQuickPickModeCommand}"
+                                    ToolTip="点击切换：常用 / 最近使用"
+                                    FontSize="{DynamicResource CodeMemoFontSizeSmall}" />
+                            <TextBlock Text="快捷复制 Top10" FontWeight="Bold"
+                                       FontSize="{DynamicResource CodeMemoFontSizeSmall}"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" />
+                        </DockPanel>
+                        <ItemsControl ItemsSource="{Binding QuickPicks}" Margin="0,8,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Margin="0,0,6,6" Padding="8,3"
+                                            Command="{Binding DataContext.CopyQuickPickCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip="{Binding GroupBadge}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Title}"
+                                                       FontSize="{DynamicResource CodeMemoFontSizeSmall}" />
+                                            <TextBlock Text="{Binding UseCountText}" Margin="6,0,0,0"
+                                                       FontSize="{DynamicResource CodeMemoFontSizeBadge}"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource SecondaryTextBrush}" />
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- 列表头：计数 + 排序 -->
+                <DockPanel Grid.Row="1" Margin="4,0,4,8">
+                    <ComboBox DockPanel.Dock="Right" Width="110" FontSize="{DynamicResource CodeMemoFontSizeSmall}"
+                              ItemsSource="{Binding SortOptions}"
+                              SelectedItem="{Binding SelectedSortOption}"
+                              DisplayMemberPath="Label" />
+                    <TextBlock Text="{Binding VisibleCountText}" VerticalAlignment="Center"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
+                               FontSize="{DynamicResource CodeMemoFontSizeSmall}" />
+                </DockPanel>
+
+                <Grid Grid.Row="2">
+                    <ListBox x:Name="CommandList" ItemsSource="{Binding VisibleCommands}"
+                             SelectedItem="{Binding SelectedCommand}"
+                             BorderThickness="0" Background="Transparent"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             KeyDown="OnListKeyDown"
+                             MouseDoubleClick="OnListDoubleClick">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource ListBoxItemBaseStyle}">
+                                <Setter Property="Padding" Value="12,9" />
+                                <Setter Property="Margin" Value="0,2" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <!-- 高亮控件只用 Inlines 渲染，这里补上自动化名称，读屏软件才读得到标题 -->
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel>
+                                    <!-- 复制按钮 -->
+                                    <Button DockPanel.Dock="Right" Content="复制" Width="52" Height="26"
+                                            VerticalAlignment="Center" Margin="8,0,0,0"
+                                            Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                            CommandParameter="{Binding}" />
+                                    <StackPanel>
+                                        <!-- 标题与命令都按搜索词高亮命中片段 -->
+                                        <local:HighlightTextBlock Source="{Binding Title}"
+                                                                  Query="{Binding DataContext.SearchText, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                  FontWeight="SemiBold"
+                                                                  FontSize="{DynamicResource CodeMemoFontSizeBody}"
+                                                                  TextTrimming="CharacterEllipsis" />
+                                        <local:HighlightTextBlock Source="{Binding CommandOneLine}"
+                                                                  Query="{Binding DataContext.SearchText, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                  FontSize="{DynamicResource CodeMemoFontSizeSmall}"
+                                                                  Margin="0,3,0,0"
+                                                                  FontFamily="Consolas"
+                                                                  Foreground="{DynamicResource SecondaryTextBrush}"
+                                                                  TextTrimming="CharacterEllipsis" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                            <Border CornerRadius="3" Padding="5,1"
+                                                    Background="{DynamicResource SecondaryRegionBrush}">
+                                                <TextBlock Text="{Binding GroupBadge}"
+                                                           FontSize="{DynamicResource CodeMemoFontSizeBadge}"
+                                                           Foreground="{DynamicResource SecondaryTextBrush}" />
+                                            </Border>
+                                            <TextBlock Text="{Binding UseCountText}"
+                                                       FontSize="{DynamicResource CodeMemoFontSizeBadge}"
+                                                       VerticalAlignment="Center" Margin="8,0,0,0"
+                                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       Visibility="{Binding UseCountText, Converter={StaticResource String2VisibilityConverter}}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <!-- 空态：0 条结果时给出引导与新增入口 -->
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Visibility="{Binding HasNoResults, Converter={StaticResource Boolean2VisibilityConverter}}">
+                        <TextBlock Text="{Binding EmptyStateText}" HorizontalAlignment="Center"
+                                   FontSize="{DynamicResource CodeMemoFontSizeBody}"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" />
+                        <Button Content="新增命令" Width="96" Margin="0,14,0,0" HorizontalAlignment="Center"
+                                Command="{Binding AddCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <GridSplitter Grid.Column="3" Width="8" HorizontalAlignment="Stretch" Background="Transparent" />
+
+            <!-- ── 右栏：详情 ── -->
+            <Border Grid.Column="4" Background="{DynamicResource RegionBrush}"
+                    CornerRadius="8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <Grid>
+                    <!-- 空态 -->
+                    <TextBlock Text="←  选择一条命令查看详情" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
+                               Visibility="{Binding HasSelected, Converter={StaticResource Boolean2VisibilityReConverter}}" />
+
+                    <DockPanel Margin="16,14" DataContext="{Binding SelectedCommand}"
+                               Visibility="{Binding DataContext.HasSelected, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Boolean2VisibilityConverter}}">
+                        <!-- 操作按钮 -->
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button Content="复制填好的命令" Style="{StaticResource ButtonPrimary}" Width="126"
+                                    Visibility="{Binding DataContext.HasPlaceholders, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Boolean2VisibilityConverter}}"
+                                    Command="{Binding DataContext.CopyFilledCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    ToolTip="把下面填好的参数替换进命令再复制" />
+                            <Button Content="复制命令" Width="84" Margin="10,0,0,0"
+                                    Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}" />
+                            <Button Content="编辑" Width="72" Margin="10,0,0,0"
+                                    Command="{Binding DataContext.EditCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}" />
+                            <Button Content="删除" Width="72" Margin="10,0,0,0"
+                                    Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip="快捷键 Delete" />
+                        </StackPanel>
+
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Title}" FontSize="{DynamicResource CodeMemoFontSizeTitle}"
+                                           FontWeight="Bold" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding GroupBadge}" Margin="0,6,0,0"
+                                           FontSize="{DynamicResource CodeMemoFontSizeSmall}"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" />
+
+                                <!-- 命令全文：可选中复制 -->
+                                <Border Background="{DynamicResource SecondaryRegionBrush}" CornerRadius="6"
+                                        Padding="12,10" Margin="0,12,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="命令" FontWeight="Bold"
+                                                   FontSize="{DynamicResource CodeMemoFontSizeSmall}"
+                                                   Foreground="{DynamicResource SecondaryTextBrush}" />
+                                        <TextBox Text="{Binding CommandText, Mode=OneWay}" IsReadOnly="True"
+                                                 FontFamily="Consolas"
+                                                 FontSize="{DynamicResource CodeMemoFontSizeBody}"
+                                                 TextWrapping="Wrap" BorderThickness="0" Background="Transparent"
+                                                 Margin="0,6,0,0" />
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 参数填充：把 <xxx> 变成输入框，复制时自动替换 -->
+                                <StackPanel Margin="0,14,0,0"
+                                            Visibility="{Binding DataContext.HasPlaceholders, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Boolean2VisibilityConverter}}">
+                                    <TextBlock Text="参数填充" FontWeight="Bold"
+                                               FontSize="{DynamicResource CodeMemoFontSizeSmall}"
+                                               Foreground="{DynamicResource SecondaryTextBrush}" />
+                                    <ItemsControl Margin="0,6,0,0"
+                                                  ItemsSource="{Binding DataContext.Placeholders, RelativeSource={RelativeSource AncestorType=Window}}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <DockPanel Margin="0,0,0,6">
+                                                    <TextBlock DockPanel.Dock="Left" Text="{Binding Name}"
+                                                               Width="110" VerticalAlignment="Center"
+                                                               FontFamily="Consolas"
+                                                               FontSize="{DynamicResource CodeMemoFontSizeSmall}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding Name}" />
+                                                    <hc:TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                                                hc:InfoElement.Placeholder="填入参数值（留空则保留尖括号）" />
+                                                </DockPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <TextBlock Text="复制预览" FontWeight="Bold" Margin="0,8,0,0"
+                                               FontSize="{DynamicResource CodeMemoFontSizeSmall}"
+                                               Foreground="{DynamicResource SecondaryTextBrush}" />
+                                    <Border Background="{DynamicResource SecondaryRegionBrush}" CornerRadius="6"
+                                            Padding="12,10" Margin="0,6,0,0">
+                                        <TextBox Text="{Binding DataContext.FilledCommandText, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"
+                                                 IsReadOnly="True" FontFamily="Consolas"
+                                                 FontSize="{DynamicResource CodeMemoFontSizeBody}"
+                                                 TextWrapping="Wrap" BorderThickness="0" Background="Transparent" />
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- 备注 -->
+                                <TextBlock Text="备注" FontWeight="Bold" Margin="0,14,0,0"
+                                           FontSize="{DynamicResource CodeMemoFontSizeSmall}"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" />
+                                <TextBlock Text="{Binding DataContext.DetailNoteText, RelativeSource={RelativeSource AncestorType=Window}}"
+                                           FontSize="{DynamicResource CodeMemoFontSizeBody}"
+                                           TextWrapping="Wrap" LineHeight="21" Margin="0,6,0,0" />
+
+                                <!-- 使用信息 -->
+                                <TextBlock Margin="0,14,0,0" FontSize="{DynamicResource CodeMemoFontSizeSmall}"
+                                           Foreground="{DynamicResource SecondaryTextBrush}">
+                                    <Run Text="复制 " /><Run Text="{Binding Entry.UseCount, Mode=OneWay}" FontWeight="Bold" /><Run Text=" 次" />
+                                </TextBlock>
+                                <TextBlock Margin="0,4,0,0" FontSize="{DynamicResource CodeMemoFontSizeSmall}"
+                                           Foreground="{DynamicResource SecondaryTextBrush}">
+                                    <Run Text="最近复制：" /><Run Text="{Binding LastUsedText, Mode=OneWay}" />
+                                </TextBlock>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>
