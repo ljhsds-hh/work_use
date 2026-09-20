@@ -8,6 +8,7 @@ using SpaceMaid.Core.Quarantine;
 using SpaceMaid.Core.Reporting;
 using SpaceMaid.Core.Safety;
 using SpaceMaid.Core.Scanning;
+using SpaceMaid.Core.Scanning.Selectors;
 using SpaceMaid.Core.Settings;
 
 namespace SpaceMaid.Core;
@@ -51,7 +52,7 @@ public sealed class CoreServices
         Environment = environment;
 
         SafetyGate = new SafetyGate(fileSystem, environment, log);
-        Scanner = new ScanEngine(fileSystem, environment, volumes, clock, capacity: null, recycleBin: recycleBin, log: log);
+        Scanner = new ScanEngine(fileSystem, environment, volumes, clock, capacity: null, recycleBin: recycleBin, log: log, selectors: new IItemCandidateSelector[] { new LargeFileSelector(), new DuplicateFileSelector(), new OrphanDirectorySelector(new RegistryInstalledProgramIndex(log), clock, log, environment) });
         QuarantineStore = new QuarantineStore(fileSystem, volumes, clock, log);
         Quarantine = new QuarantineService(QuarantineStore, fileSystem, volumes, clock, log);
         PathValidator = new QuarantinePathValidator();

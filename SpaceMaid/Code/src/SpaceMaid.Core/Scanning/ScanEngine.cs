@@ -26,7 +26,13 @@ public sealed class ScanEngine : IScanEngine
     private readonly IVolumeCapacityProbe? _capacity;
     private readonly IRecycleBinScanner? _recycleBin;
     private readonly ILogSink _log;
+    private readonly IReadOnlyList<IItemCandidateSelector> _selectors;
 
+    /// <param name="selectors">
+    /// 各清理项的"候选收窄器"（可选）。**它们只能把候选集收窄，不能扩大**——
+    /// 收窄器返回值中不属于原候选集的文件会被本类直接丢弃；抛异常时该条目按空集处理。
+    /// 默认 null = 不启用任何收窄（保持历史行为，既有调用点无需改动）。
+    /// </param>
     public ScanEngine(
         IFileSystem fileSystem,
         IEnvironmentProbe environment,
@@ -34,7 +40,8 @@ public sealed class ScanEngine : IScanEngine
         IClock clock,
         IVolumeCapacityProbe? capacity = null,
         IRecycleBinScanner? recycleBin = null,
-        ILogSink? log = null)
+        ILogSink? log = null,
+        IEnumerable<IItemCandidateSelector>? selectors = null)
     {
         _fileSystem = fileSystem;
         _environment = environment;
@@ -43,6 +50,7 @@ public sealed class ScanEngine : IScanEngine
         _capacity = capacity;
         _recycleBin = recycleBin;
         _log = log ?? SilentLogSink.Instance;
+        _selectors = selectors?.Where(selector => selector is not null).ToList() ?? new List<IItemCandidateSelector>();
     }
 
     public Task<ScanReport> ScanAsync(
@@ -63,7 +71,8 @@ public sealed class ScanEngine : IScanEngine
             cancellationToken.ThrowIfCancellationRequested();
 
             var (candidates, unavailableReason) = CollectCandidates(item, request.IncludeRecycleBin, cancellationToken);
-            var outcome = ScanningRules.Apply(item, candidates, now, GetTargetCreationTime(item));
+            var narrowed = ApplySelectors(item, candidates, cancellationToken);
+            var outcome = ScanningRules.Apply(item, narrowed, now, GetTargetCreationTime(item));
 
             var totalBytes = outcome.Files.Sum(f => f.Size);
             processedBytes += totalBytes;
@@ -188,6 +197,81 @@ public sealed class ScanEngine : IScanEngine
         }
 
         return (candidates, null);
+    }
+
+    /// <summary>
+    /// 把候选集交给匹配的收窄器（扫描层唯一允许"减少候选"的扩展点）。
+    ///
+    /// 安全性质：
+    /// ① **只收窄**——收窄器返回值里凡是"不在当前候选集里"的文件一律丢弃（防止某个实现凭空放行文件）；
+    /// ② **失败关闭**——收窄器抛异常时该项按"什么都判定不了"处理，返回空集，
+    ///    绝不退化成"异常了就全都要"；
+    /// ③ 多个收窄器同时命中同一项时按顺序依次收窄（交集），仍然只会越收越少。
+    /// </summary>
+    private List<ScanFile> ApplySelectors(
+        CleanItemDefinition item,
+        List<ScanFile> candidates,
+        CancellationToken cancellationToken)
+    {
+        var current = candidates;
+
+        foreach (var selector in _selectors)
+        {
+            if (!selector.CanHandle(item.Id))
+            {
+                continue;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            IReadOnlyList<ScanFile> selected;
+            try
+            {
+                selected = selector.Select(item, current, _fileSystem, _log) ?? Array.Empty<ScanFile>();
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _log.Error($"条目 {item.Id} 的候选收窄器 {selector.GetType().Name} 执行失败，" +
+                           "本项按“无法判定”处理（不列出任何文件）", ex);
+                return new List<ScanFile>();
+            }
+
+            var allowed = new HashSet<string>(current.Select(f => f.Path), StringComparer.OrdinalIgnoreCase);
+            var narrowed = new List<ScanFile>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var rejected = 0;
+
+            foreach (var file in selected)
+            {
+                if (file is null || !allowed.Contains(file.Path) || !seen.Add(file.Path))
+                {
+                    rejected++;
+                    continue;
+                }
+
+                narrowed.Add(file);
+            }
+
+            if (rejected > 0)
+            {
+                // 收窄器只能收窄：不属于原候选集（或重复）的条目一律不算数。
+                _log.Warn($"候选收窄器 {selector.GetType().Name} 返回了 {rejected} 个不在候选集内的条目，" +
+                          $"已丢弃（收窄器只允许收窄，条目 {item.Id}）");
+            }
+
+            if (narrowed.Count != current.Count)
+            {
+                _log.Info($"条目 {item.Id} 候选收窄：{current.Count} → {narrowed.Count}");
+            }
+
+            current = narrowed;
+        }
+
+        return current;
     }
 
     private ScanFile ToScanFile(string path, CleanItemDefinition item, DateTimeOffset lastWrite, long size) =>
