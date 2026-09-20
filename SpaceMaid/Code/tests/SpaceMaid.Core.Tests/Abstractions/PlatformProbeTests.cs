@@ -1,4 +1,5 @@
 using SpaceMaid.Core.Abstractions;
+using SpaceMaid.Core.Logging;
 using SpaceMaid.Core.Platform;
 
 namespace SpaceMaid.Core.Tests.Abstractions;
@@ -114,9 +115,9 @@ public class PlatformProbeTests
     }
 
     [Fact]
-    public void NullLogSink_should_swallow_everything()
+    public void SilentLogSink_should_swallow_everything()
     {
-        ILogSink sink = new NullLogSink();
+        ILogSink sink = SilentLogSink.Instance;
 
         Exception? thrown = Record.Exception(() =>
         {
