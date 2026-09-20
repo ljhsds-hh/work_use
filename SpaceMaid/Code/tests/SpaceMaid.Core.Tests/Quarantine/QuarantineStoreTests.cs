@@ -184,6 +184,37 @@ public class QuarantineStoreTests
     }
 
     [Fact]
+    public async Task Concurrent_stores_in_the_same_millisecond_should_not_overwrite_each_others_ledger()
+    {
+        using var root = new TempRoot();
+        var quarantine = root.Combine("quarantine");
+        Directory.CreateDirectory(quarantine);
+
+        // 并发 + 固定时钟 = 最恶劣的撞名场景：8 次分配的基准 Id 完全一样。
+        // 这是对抗式评审 F-15：只靠"检查目录是否存在 -> 稍后创建"，
+        // 两个并发调用都可能通过"不存在"检查，随后后写的账本覆盖先写的（文件成无主）。
+        const int count = 8;
+        var sources = Enumerable.Range(0, count)
+            .Select(i => root.WriteFile($@"source\file{i}.tmp", new string((char)('a' + i), 32)))
+            .ToArray();
+
+        var results = await Task.WhenAll(sources.Select(source => Task.Run(() =>
+            CreateStore(new WindowsFileSystem(), new MappedVolumeProbe())
+                .StoreCore(quarantine, 7, new[] { Planned(source, 32) }, null, CancellationToken.None))));
+
+        Assert.Equal(count, results.Select(r => r.BatchId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(count, results.Select(r => r.BatchDirectory).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(count, Directory.EnumerateDirectories(quarantine).Count());
+
+        // 账本一份都不能少，且每份只记自己那一个文件（覆盖会表现为份数变少或条目串台）
+        var inspector = CreateStore(new WindowsFileSystem(), new MappedVolumeProbe());
+        var maps = inspector.ReadAllMaps(quarantine);
+        Assert.Equal(count, maps.Count);
+        Assert.All(maps, pair => Assert.Single(pair.Map.Entries));
+        Assert.Equal(count, maps.Select(p => p.Map.Entries.Single().OriginalPath).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+    [Fact]
     public void Should_report_quarantine_info_with_expiry()
     {
         using var root = new TempRoot();

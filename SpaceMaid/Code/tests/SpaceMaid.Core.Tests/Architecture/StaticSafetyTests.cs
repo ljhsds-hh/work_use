@@ -124,9 +124,39 @@ public class StaticSafetyTests
         }
     }
 
+    /// <summary>
+    /// 不变量 I-6 的**第二个入口**：环境变量。
+    ///
+    /// 为什么单独立一条：命令行开关能被上面那条用例挡住，但"读环境变量决定要不要跳过安全检查"
+    /// 同样是一个绕过入口，而且更隐蔽——它在源码里长得像普通的配置读取。
+    /// 这条不是凭空的：修批次分配锁时我自己就临时加过一个 `SPACEMAID_DISABLE_...` 开关做反向验证，
+    /// 事后靠人眼确认删干净了。有了这条用例，那种"忘了删"会直接红。
+    ///
+    /// 只拦"看起来是安全绕过"的名字；读 `SystemDrive` 这类系统变量不受影响。
+    /// </summary>
     [Fact]
-    public void Hibernate_file_must_never_be_a_deletion_target()
+    public void Core_should_not_read_bypass_style_environment_variables()
     {
+        var suspicious = new Regex("disable|skip|bypass|force|ignore|unsafe|nocheck", RegexOptions.IgnoreCase);
+        var pattern = new Regex(@"GetEnvironmentVariable\(\s*""([^""]+)""", RegexOptions.IgnoreCase);
+        var offenders = new List<string>();
+
+        foreach (var (file, text) in ReadCoreSources())
+        {
+            foreach (Match match in pattern.Matches(text))
+            {
+                if (suspicious.IsMatch(match.Groups[1].Value))
+                {
+                    offenders.Add($"{file}: {match.Value}");
+                }
+            }
+        }
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void Hibernate_file_must_never_be_a_deletion_target()    {
         // 需求 3.8 / 4.2：hiberfil.sys 只能通过 powercfg /h off 释放，绝不作为删除目标。
         // 用"目标路径 + 禁止清单"两条可验证事实来断言，而不是简单禁止这个字符串出现
         // （清单的后果说明与注释里提到它是必要的）。

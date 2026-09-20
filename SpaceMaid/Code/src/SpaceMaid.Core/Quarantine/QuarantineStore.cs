@@ -19,6 +19,21 @@ public sealed class QuarantineStore
 {
     private const string PayloadFolder = "payload";
 
+    /// <summary>等待批次分配锁的上限。超时即失败，**绝不**在没拿到锁的情况下继续分配。</summary>
+    private static readonly TimeSpan BatchAllocationLockTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// 批次目录分配的**跨进程**互斥锁（对抗式评审 F-15）。
+    ///
+    /// 为什么必须跨进程：批次 Id 精确到毫秒。两个实例在同一毫秒各自开始清理时，
+    /// "检查目录是否存在 → 稍后再创建"之间会算出同一个批次 Id，两边都往同一个目录写 <c>map.json</c>，
+    /// 后写的那份覆盖前一份——被覆盖那一批搬走的文件就成了无主文件，**这是不可逆的数据丢失**。
+    ///
+    /// 为什么用 <c>Local\</c> 而不是 <c>Global\</c>：隔离区在用户目录下，冲突只可能发生在同一登录会话内
+    /// （同一用户开两个实例）；<c>Global\</c> 需要额外特权，没必要。
+    /// </summary>
+    private static readonly Mutex BatchAllocationLock = new(false, @"Local\SpaceMaid.Quarantine.BatchAllocation");
+
     private readonly IFileSystem _fileSystem;
     private readonly IVolumeProbe _volumes;
     private readonly IClock _clock;
@@ -438,24 +453,67 @@ public sealed class QuarantineStore
     }
 
     /// <summary>
-    /// 分配一个**唯一**的批次目录。
-    /// 为什么需要去重：批次 Id 精确到毫秒，同一毫秒内连续清理两次（或时钟被回拨）会撞名，
-    /// 后一批的账本会覆盖前一批，直接导致文件丢失——必须在这里挡住。
+    /// 分配一个**唯一**的批次目录，并在锁内把它占下来。
+    ///
+    /// 为什么要去重：批次 Id 精确到毫秒，同一毫秒内连续清理两次（或时钟被回拨）会撞名，
+    /// 后一批的账本会覆盖前一批，直接导致文件丢失。
+    ///
+    /// 为什么要跨进程锁 + "在锁内建目录"：只算名字不建目录的话，另一个进程仍会算出同一个名字；
+    /// 只建目录不上锁的话，两个进程可能同时通过"不存在"检查。两者必须一起做，窗口才真正关上。
     /// </summary>
     private (string BatchId, string BatchDirectory) AllocateBatch(string quarantineRoot, DateTimeOffset createdAt)
     {
-        var baseId = CreateBatchId(createdAt);
-        var batchId = baseId;
-        var directory = GetBatchDirectory(quarantineRoot, batchId);
-        var suffix = 1;
-
-        while (_fileSystem.DirectoryExists(directory))
+        var acquired = false;
+        try
         {
-            batchId = $"{baseId}-{suffix++}";
-            directory = GetBatchDirectory(quarantineRoot, batchId);
-        }
+            try
+            {
+                acquired = BatchAllocationLock.WaitOne(BatchAllocationLockTimeout);
+            }
+            catch (AbandonedMutexException)
+            {
+                // 上一个持有者崩溃退出：锁已经归我们，按"已获得"处理（否则会因为这个偶发情况整批失败）
+                acquired = true;
+            }
 
-        return (batchId, directory);
+            if (!acquired)
+            {
+                // 失败关闭：拿不到锁就**不分配**。宁可这一次清理整体失败，也不能冒覆盖账本的风险。
+                throw new InvalidOperationException(
+                    $"等待隔离批次分配锁超时（{BatchAllocationLockTimeout.TotalSeconds:0} 秒），已中止本次隔离以避免批次账本被覆盖。");
+            }
+
+            var baseId = CreateBatchId(createdAt);
+            var batchId = baseId;
+            var directory = GetBatchDirectory(quarantineRoot, batchId);
+            var suffix = 1;
+
+            while (_fileSystem.DirectoryExists(directory))
+            {
+                batchId = $"{baseId}-{suffix++}";
+                directory = GetBatchDirectory(quarantineRoot, batchId);
+            }
+
+            // 在锁内把批次目录**建出来**，让"这个名字归我"对其它进程立刻可见。
+            // 创建失败不在这里抛：下面的写账本会失败并走"未搬运任何文件"的既有降级路径（语义更清楚）。
+            try
+            {
+                _fileSystem.CreateDirectory(directory);
+            }
+            catch (Exception ex)
+            {
+                _log.Warn($"预创建隔离批次目录失败：{ex.Message}（写账本时会再次失败，本次将不搬运任何文件）");
+            }
+
+            return (batchId, directory);
+        }
+        finally
+        {
+            if (acquired)
+            {
+                BatchAllocationLock.ReleaseMutex();
+            }
+        }
     }
 
     private IEnumerable<string> EnumerateBatchDirectories(string quarantineRoot)
