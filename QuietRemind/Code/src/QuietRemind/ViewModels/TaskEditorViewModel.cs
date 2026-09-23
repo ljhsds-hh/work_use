@@ -13,6 +13,7 @@ public sealed class TaskEditorViewModel : ViewModelBase
     private DateTime? _startDate;
     private int _selectedHour;
     private int _selectedMinute;
+    private bool _isTimePanelOpen;
     private int _monthDay = 1;
     private string? _errorText;
     private bool[] _weekDays = new bool[7];
@@ -90,14 +91,36 @@ public sealed class TaskEditorViewModel : ViewModelBase
     public int SelectedHour
     {
         get => _selectedHour;
-        set => SetProperty(ref _selectedHour, value);
+        set
+        {
+            if (SetProperty(ref _selectedHour, value))
+            {
+                OnPropertyChanged(nameof(TimeText));
+            }
+        }
     }
 
     /// <summary>提醒时刻-分钟（0~59）。</summary>
     public int SelectedMinute
     {
         get => _selectedMinute;
-        set => SetProperty(ref _selectedMinute, value);
+        set
+        {
+            if (SetProperty(ref _selectedMinute, value))
+            {
+                OnPropertyChanged(nameof(TimeText));
+            }
+        }
+    }
+
+    /// <summary>时刻触发按钮显示文本（HH:mm）。</summary>
+    public string TimeText => $"{SelectedHour:00}:{SelectedMinute:00}";
+
+    /// <summary>时刻点选面板开合（绑定触发按钮与 Popup）。</summary>
+    public bool IsTimePanelOpen
+    {
+        get => _isTimePanelOpen;
+        set => SetProperty(ref _isTimePanelOpen, value);
     }
 
     public int MonthDay

@@ -82,26 +82,48 @@
             </StackPanel>
 
             <TextBlock Text="提醒时刻" FontSize="12" FontWeight="SemiBold" Foreground="#64748B" Margin="0,16,0,6" />
-            <StackPanel Orientation="Horizontal">
-                <hc:ComboBox Width="86" ItemsSource="{Binding Hours}" SelectedItem="{Binding SelectedHour, Mode=TwoWay}">
-                    <hc:ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding StringFormat={}{0:00}}" />
-                        </DataTemplate>
-                    </hc:ComboBox.ItemTemplate>
-                </hc:ComboBox>
-                <TextBlock Text=":" FontSize="14" FontWeight="SemiBold" Foreground="#0F172A"
-                           VerticalAlignment="Center" Margin="8,0" />
-                <hc:ComboBox Width="86" ItemsSource="{Binding Minutes}" SelectedItem="{Binding SelectedMinute, Mode=TwoWay}">
-                    <hc:ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding StringFormat={}{0:00}}" />
-                        </DataTemplate>
-                    </hc:ComboBox.ItemTemplate>
-                </hc:ComboBox>
-                <TextBlock Text="时 / 分，24 小时制" FontSize="11" Foreground="#94A3B8"
-                           VerticalAlignment="Center" Margin="10,1,0,0" />
-            </StackPanel>
+            <Grid HorizontalAlignment="Left">
+                <ToggleButton x:Name="TimeTriggerButton" Style="{StaticResource TimeTriggerButton}"
+                              IsChecked="{Binding IsTimePanelOpen, Mode=TwoWay}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE121;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                   Foreground="#64748B" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="{Binding TimeText}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="#0F172A" VerticalAlignment="Center" />
+                        <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="8"
+                                   Foreground="#94A3B8" VerticalAlignment="Center" Margin="10,0,0,0" />
+                    </StackPanel>
+                </ToggleButton>
+
+                <Popup IsOpen="{Binding IsTimePanelOpen, Mode=TwoWay}"
+                       PlacementTarget="{Binding ElementName=TimeTriggerButton}"
+                       Placement="Bottom" StaysOpen="False" AllowsTransparency="True"
+                       PopupAnimation="Fade">
+                    <Border Style="{StaticResource TimePanelCard}">
+                        <StackPanel>
+                            <TextBlock Text="时（24 小时制）" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="#94A3B8" Margin="0,0,0,4" />
+                            <ListBox ItemsSource="{Binding Hours}"
+                                     SelectedItem="{Binding SelectedHour, Mode=TwoWay}"
+                                     ItemsPanel="{StaticResource TimeCellPanel}"
+                                     ItemContainerStyle="{StaticResource TimeCell}"
+                                     ItemTemplate="{StaticResource TimeCellText}"
+                                     Width="276" Padding="0" Background="Transparent"
+                                     BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
+                            <TextBlock Text="分" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="#94A3B8" Margin="0,12,0,4" />
+                            <ListBox ItemsSource="{Binding Minutes}"
+                                     SelectedItem="{Binding SelectedMinute, Mode=TwoWay}"
+                                     ItemsPanel="{StaticResource TimeCellPanel}"
+                                     ItemContainerStyle="{StaticResource TimeCell}"
+                                     ItemTemplate="{StaticResource TimeCellText}"
+                                     Width="276" Padding="0" Background="Transparent"
+                                     BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     MouseUp="OnMinutePicked" />
+                        </StackPanel>
+                    </Border>
+                </Popup>
+            </Grid>
             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                 <TextBlock Text="常用" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center" Margin="0,0,8,0" />
                 <Button Style="{StaticResource PresetTimeChip}" Content="08:00" Tag="08:00" Click="OnPresetTime" />

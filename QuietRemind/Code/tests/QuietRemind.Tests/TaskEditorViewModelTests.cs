@@ -39,6 +39,13 @@ public class TaskEditorViewModelTests
     }
 
     [Fact]
+    public void 时刻文本_按时分两位补零()
+    {
+        var vm = new TaskEditorViewModel(null) { SelectedHour = 7, SelectedMinute = 5 };
+        Assert.Equal("07:05", vm.TimeText);
+    }
+
+    [Fact]
     public void 保存_内容为空_提示错误不产出()
     {
         var vm = new TaskEditorViewModel(null) { Content = "  " };
