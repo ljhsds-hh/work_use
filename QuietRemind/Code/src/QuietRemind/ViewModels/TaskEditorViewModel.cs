@@ -11,9 +11,7 @@ public sealed class TaskEditorViewModel : ViewModelBase
     private RecurrenceType _recurrence;
     private DateTime? _singleDate;
     private DateTime? _startDate;
-    private int _selectedHour;
-    private int _selectedMinute;
-    private bool _isTimePanelOpen;
+    private DateTime? _selectedTime;
     private int _monthDay = 1;
     private string? _errorText;
     private bool[] _weekDays = new bool[7];
@@ -25,9 +23,7 @@ public sealed class TaskEditorViewModel : ViewModelBase
         _recurrence = existing?.RecurrenceType ?? RecurrenceType.Daily;
         _singleDate = existing?.SingleDate is { } d ? d.ToDateTime(TimeOnly.MinValue) : null;
         _startDate = existing?.StartDate is { } s ? s.ToDateTime(TimeOnly.MinValue) : null;
-        var time = existing?.Time ?? new TimeSpan(9, 0, 0);
-        _selectedHour = time.Hours;
-        _selectedMinute = time.Minutes;
+        _selectedTime = DateTime.Today.Add(existing?.Time ?? new TimeSpan(9, 0, 0));
         _monthDay = existing?.MonthDay ?? 1;
         if (existing?.WeekDays is { Length: > 0 } days)
         {
@@ -81,46 +77,10 @@ public sealed class TaskEditorViewModel : ViewModelBase
         set => SetProperty(ref _startDate, value);
     }
 
-    /// <summary>可选小时（0~23，24 小时制）。</summary>
-    public IReadOnlyList<int> Hours { get; } = Enumerable.Range(0, 24).ToArray();
-
-    /// <summary>可选分钟（0~59）。</summary>
-    public IReadOnlyList<int> Minutes { get; } = Enumerable.Range(0, 60).ToArray();
-
-    /// <summary>提醒时刻-小时（0~23）。</summary>
-    public int SelectedHour
+    public DateTime? SelectedTime
     {
-        get => _selectedHour;
-        set
-        {
-            if (SetProperty(ref _selectedHour, value))
-            {
-                OnPropertyChanged(nameof(TimeText));
-            }
-        }
-    }
-
-    /// <summary>提醒时刻-分钟（0~59）。</summary>
-    public int SelectedMinute
-    {
-        get => _selectedMinute;
-        set
-        {
-            if (SetProperty(ref _selectedMinute, value))
-            {
-                OnPropertyChanged(nameof(TimeText));
-            }
-        }
-    }
-
-    /// <summary>时刻触发按钮显示文本（HH:mm）。</summary>
-    public string TimeText => $"{SelectedHour:00}:{SelectedMinute:00}";
-
-    /// <summary>时刻点选面板开合（绑定触发按钮与 Popup）。</summary>
-    public bool IsTimePanelOpen
-    {
-        get => _isTimePanelOpen;
-        set => SetProperty(ref _isTimePanelOpen, value);
+        get => _selectedTime;
+        set => SetProperty(ref _selectedTime, value);
     }
 
     public int MonthDay
@@ -179,7 +139,7 @@ public sealed class TaskEditorViewModel : ViewModelBase
             task.CreatedAt = DateTime.Now;
         }
         task.Content = Content.Trim();
-        task.Time = new TimeSpan(Math.Clamp(SelectedHour, 0, 23), Math.Clamp(SelectedMinute, 0, 59), 0);
+        task.Time = SelectedTime is { } t ? new TimeSpan(t.Hour, t.Minute, 0) : new TimeSpan(9, 0, 0);
         task.RecurrenceType = Recurrence;
         task.SingleDate = Recurrence == RecurrenceType.Once && SingleDate is { } d
             ? DateOnly.FromDateTime(d)

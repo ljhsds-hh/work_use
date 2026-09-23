@@ -33,20 +33,5 @@ public partial class TaskEditorWindow : Window
         }
     }
 
-    private void OnPresetTime(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.Button { Tag: string tag }
-            && TimeSpan.TryParse(tag, out var time))
-        {
-            _vm.SelectedHour = time.Hours;
-            _vm.SelectedMinute = time.Minutes;
-            _vm.IsTimePanelOpen = false;
-        }
-    }
-
-    /// <summary>点中任意分钟方格即完成选择，自动收起面板（鼠标事件不会在初始绑定时触发，无误关）。</summary>
-    private void OnMinutePicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        => _vm.IsTimePanelOpen = false;
-
     private void OnCancel(object sender, RoutedEventArgs e) => DialogResult = false;
 }
