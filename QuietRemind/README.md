@@ -68,7 +68,7 @@ Code/
     Models/                  任务 / 实例 / 设置
     Helpers/                 轻量 MVVM 基础设施
     Assets/                  应用图标（scripts/gen-icon.ps1 生成）
-  tests/QuietRemind.Tests/   xUnit 单元测试（39 用例）
+  tests/QuietRemind.Tests/   xUnit 单元测试（48 用例）
 Docs/
   需求.md                     需求规格说明书（唯一需求基线）
   设计文档.md                 架构与模块设计
