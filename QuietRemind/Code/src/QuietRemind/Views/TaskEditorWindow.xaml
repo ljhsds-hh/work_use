@@ -82,7 +82,35 @@
             </StackPanel>
 
             <TextBlock Text="提醒时刻" FontSize="12" FontWeight="SemiBold" Foreground="#64748B" Margin="0,16,0,6" />
-            <hc:TimePicker SelectedTime="{Binding SelectedTime, Mode=TwoWay}" Width="160" HorizontalAlignment="Left" />
+            <StackPanel Orientation="Horizontal">
+                <hc:ComboBox Width="86" ItemsSource="{Binding Hours}" SelectedItem="{Binding SelectedHour, Mode=TwoWay}">
+                    <hc:ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding StringFormat={}{0:00}}" />
+                        </DataTemplate>
+                    </hc:ComboBox.ItemTemplate>
+                </hc:ComboBox>
+                <TextBlock Text=":" FontSize="14" FontWeight="SemiBold" Foreground="#0F172A"
+                           VerticalAlignment="Center" Margin="8,0" />
+                <hc:ComboBox Width="86" ItemsSource="{Binding Minutes}" SelectedItem="{Binding SelectedMinute, Mode=TwoWay}">
+                    <hc:ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding StringFormat={}{0:00}}" />
+                        </DataTemplate>
+                    </hc:ComboBox.ItemTemplate>
+                </hc:ComboBox>
+                <TextBlock Text="时 / 分，24 小时制" FontSize="11" Foreground="#94A3B8"
+                           VerticalAlignment="Center" Margin="10,1,0,0" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                <TextBlock Text="常用" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <Button Style="{StaticResource PresetTimeChip}" Content="08:00" Tag="08:00" Click="OnPresetTime" />
+                <Button Style="{StaticResource PresetTimeChip}" Content="09:00" Tag="09:00" Click="OnPresetTime" />
+                <Button Style="{StaticResource PresetTimeChip}" Content="12:00" Tag="12:00" Click="OnPresetTime" />
+                <Button Style="{StaticResource PresetTimeChip}" Content="14:00" Tag="14:00" Click="OnPresetTime" />
+                <Button Style="{StaticResource PresetTimeChip}" Content="18:00" Tag="18:00" Click="OnPresetTime" />
+                <Button Style="{StaticResource PresetTimeChip}" Content="21:00" Tag="21:00" Click="OnPresetTime" />
+            </StackPanel>
 
             <TextBlock Text="{Binding ErrorText}" Foreground="#EF4444" TextWrapping="Wrap"
                        FontSize="12" Margin="0,12,0,0" Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}" />

@@ -33,5 +33,15 @@ public partial class TaskEditorWindow : Window
         }
     }
 
+    private void OnPresetTime(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button { Tag: string tag }
+            && TimeSpan.TryParse(tag, out var time))
+        {
+            _vm.SelectedHour = time.Hours;
+            _vm.SelectedMinute = time.Minutes;
+        }
+    }
+
     private void OnCancel(object sender, RoutedEventArgs e) => DialogResult = false;
 }

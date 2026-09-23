@@ -30,7 +30,7 @@
 - 服务层零 UI 依赖；时间一律经 `IClock` 注入（测试用 FakeClock）
 - 任何状态变更必须 `AppServices.Persist()` 实时落盘
 - 提醒遮罩+卡片禁止被 ESC/Alt+F4 关闭（Closing 里 e.Cancel）；卡片屏幕居中
-- 新功能优先补齐单元测试（现有 39 用例）；测试工程 net8.0-windows + UseWPF 引用主工程
+- 新功能优先补齐单元测试（现有 54 用例）；测试工程 net8.0-windows + UseWPF 引用主工程
 - 发布：Release 单文件自包含（win-x64 压缩），见 Docs/发布部署指南.md
 - 图标由 Code/scripts/gen-icon.ps1 程序化生成，勿手工编辑 app.ico
 

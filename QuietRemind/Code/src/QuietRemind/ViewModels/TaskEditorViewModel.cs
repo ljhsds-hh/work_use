@@ -11,7 +11,8 @@ public sealed class TaskEditorViewModel : ViewModelBase
     private RecurrenceType _recurrence;
     private DateTime? _singleDate;
     private DateTime? _startDate;
-    private DateTime? _selectedTime;
+    private int _selectedHour;
+    private int _selectedMinute;
     private int _monthDay = 1;
     private string? _errorText;
     private bool[] _weekDays = new bool[7];
@@ -23,7 +24,9 @@ public sealed class TaskEditorViewModel : ViewModelBase
         _recurrence = existing?.RecurrenceType ?? RecurrenceType.Daily;
         _singleDate = existing?.SingleDate is { } d ? d.ToDateTime(TimeOnly.MinValue) : null;
         _startDate = existing?.StartDate is { } s ? s.ToDateTime(TimeOnly.MinValue) : null;
-        _selectedTime = DateTime.Today.Add(existing?.Time ?? new TimeSpan(9, 0, 0));
+        var time = existing?.Time ?? new TimeSpan(9, 0, 0);
+        _selectedHour = time.Hours;
+        _selectedMinute = time.Minutes;
         _monthDay = existing?.MonthDay ?? 1;
         if (existing?.WeekDays is { Length: > 0 } days)
         {
@@ -77,10 +80,24 @@ public sealed class TaskEditorViewModel : ViewModelBase
         set => SetProperty(ref _startDate, value);
     }
 
-    public DateTime? SelectedTime
+    /// <summary>可选小时（0~23，24 小时制）。</summary>
+    public IReadOnlyList<int> Hours { get; } = Enumerable.Range(0, 24).ToArray();
+
+    /// <summary>可选分钟（0~59）。</summary>
+    public IReadOnlyList<int> Minutes { get; } = Enumerable.Range(0, 60).ToArray();
+
+    /// <summary>提醒时刻-小时（0~23）。</summary>
+    public int SelectedHour
     {
-        get => _selectedTime;
-        set => SetProperty(ref _selectedTime, value);
+        get => _selectedHour;
+        set => SetProperty(ref _selectedHour, value);
+    }
+
+    /// <summary>提醒时刻-分钟（0~59）。</summary>
+    public int SelectedMinute
+    {
+        get => _selectedMinute;
+        set => SetProperty(ref _selectedMinute, value);
     }
 
     public int MonthDay
@@ -139,7 +156,7 @@ public sealed class TaskEditorViewModel : ViewModelBase
             task.CreatedAt = DateTime.Now;
         }
         task.Content = Content.Trim();
-        task.Time = SelectedTime is { } t ? new TimeSpan(t.Hour, t.Minute, 0) : new TimeSpan(9, 0, 0);
+        task.Time = new TimeSpan(Math.Clamp(SelectedHour, 0, 23), Math.Clamp(SelectedMinute, 0, 59), 0);
         task.RecurrenceType = Recurrence;
         task.SingleDate = Recurrence == RecurrenceType.Once && SingleDate is { } d
             ? DateOnly.FromDateTime(d)
