@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <AssemblyName>XiaoDing.Tests</AssemblyName>
+    <RootNamespace>XiaoDing.Tests</RootNamespace>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <!-- 直接编译被测源文件，保持主工程零 NuGet 依赖的风格 -->
+  <ItemGroup>
+    <Compile Include="..\..\src\Core\QuickParse.cs" Link="Core\QuickParse.cs" />
+    <Compile Include="..\..\src\Core\RecurrenceCalculator.cs" Link="Core\RecurrenceCalculator.cs" />
+    <Compile Include="..\..\src\Core\TodoTask.cs" Link="Core\TodoTask.cs" />
+  </ItemGroup>
+
+</Project>

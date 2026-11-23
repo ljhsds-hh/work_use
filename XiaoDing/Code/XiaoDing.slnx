@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/XiaoDing.csproj" />
+  <Project Path="tests/XiaoDing.Tests/XiaoDing.Tests.csproj" />
+</Solution>

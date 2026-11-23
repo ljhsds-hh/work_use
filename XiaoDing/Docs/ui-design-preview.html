@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小叮 · UI 设计预览 v1</title>
+<style>
+:root{
+  --paper:#F6F3EC;
+  --paper-2:#EFEBE1;
+  --surface:#FFFDF8;
+  --surface-2:#FAF7F0;
+  --ink:#1E1B17;
+  --ink-2:#57504A;
+  --ink-3:#6E665C;
+  --line:#DDD6C9;
+  --line-strong:#C6BCA9;
+  --green:#1F5C4A;
+  --green-2:#2C7A62;
+  --green-soft:#E4EFE9;
+  --amber:#B4562A;
+  --amber-soft:#F6E7DC;
+  --shadow:rgba(70,56,38,.14);
+  --shadow-soft:rgba(70,56,38,.08);
+  --radius-w:12px;
+  --radius-c:14px;
+  --radius-b:8px;
+  --font-body:"Microsoft YaHei UI","Microsoft YaHei","Segoe UI",sans-serif;
+  --font-display:"Microsoft YaHei UI","Microsoft YaHei","Segoe UI",sans-serif;
+  --font-num:"Segoe UI","Microsoft YaHei UI",sans-serif;
+}
+html[data-theme="dark"]{
+  --paper:#16181A;
+  --paper-2:#101215;
+  --surface:#1E2124;
+  --surface-2:#232629;
+  --ink:#F0EDE6;
+  --ink-2:#B0A99E;
+  --ink-3:#8F887D;
+  --line:#33383C;
+  --line-strong:#454B50;
+  --green:#4FA98A;
+  --green-2:#63BE9E;
+  --green-soft:#1E2E28;
+  --amber:#E08A5C;
+  --amber-soft:#2E2320;
+  --shadow:rgba(0,0,0,.5);
+  --shadow-soft:rgba(0,0,0,.3);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--paper);color:var(--ink);font-family:var(--font-body);-webkit-font-smoothing:antialiased}
+body{
+  min-height:100vh;
+  background-image:radial-gradient(circle at 1px 1px, rgba(120,105,80,.10) 1px, transparent 0);
+  background-size:22px 22px;
+  transition:background-color .25s ease,color .25s ease;
+}
+
+.page{max-width:1180px;margin:0 auto;padding:56px 28px 96px}
+
+/* 页头 */
+.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:32px;flex-wrap:wrap;margin-bottom:14px}
+.hero h1{font-family:var(--font-display);font-size:40px;letter-spacing:.02em;font-weight:700}
+.hero h1 em{font-style:normal;color:var(--green)}
+.hero p{margin-top:8px;color:var(--ink-2);font-size:15px;line-height:1.7;max-width:600px}
+.hero-actions{display:flex;gap:8px}
+.toggle{
+  border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);
+  padding:9px 16px;border-radius:999px;font-size:14px;cursor:pointer;font-family:inherit;
+  transition:all .18s ease;
+}
+.toggle:hover{border-color:var(--green);color:var(--green)}
+.toggle.active{background:var(--green);color:#fff;border-color:var(--green)}
+
+.meta{display:flex;gap:26px;flex-wrap:wrap;padding:18px 0 26px;border-bottom:1px solid var(--line);margin-bottom:44px}
+.meta-item{display:flex;flex-direction:column;gap:5px}
+.meta-item b{font-size:13px;letter-spacing:.06em;color:var(--ink-3);font-weight:700}
+.meta-item span{font-size:14px;color:var(--ink-2)}
+
+/* 色板 */
+.swatches{display:flex;gap:10px;flex-wrap:wrap;margin-top:30px}
+.sw{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 12px 8px 9px}
+.sw i{width:26px;height:26px;border-radius:7px;display:block;border:1px solid rgba(0,0,0,.05)}
+.sw b{font-size:12px;font-weight:600}
+.sw span{font-size:11px;color:var(--ink-3);font-family:var(--font-num)}
+
+/* 场景 */
+.scene{margin-top:64px}
+.scene-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;flex-wrap:wrap}
+.scene-num{font-family:var(--font-num);font-size:12px;color:var(--green);font-weight:700;letter-spacing:.1em}
+.scene-head h2{font-family:var(--font-display);font-size:24px;font-weight:600}
+.badge{font-size:11px;padding:3px 9px;border-radius:999px;background:var(--green-soft);color:var(--green);font-weight:600;letter-spacing:.04em}
+.badge.mid{background:var(--amber-soft);color:var(--amber)}
+.scene-desc{color:var(--ink-2);font-size:15px;line-height:1.75;margin-bottom:22px;max-width:800px}
+
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:34px;align-items:start}
+@media(max-width:980px){.stage{grid-template-columns:1fr}}
+
+.frame{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-w);
+  box-shadow:0 22px 48px -22px var(--shadow), 0 2px 6px var(--shadow-soft);
+  overflow:hidden;
+}
+.titlebar{height:38px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.dots{display:flex;gap:6px}
+.dots i{width:9px;height:9px;border-radius:50%;background:var(--line-strong)}
+.titlebar b{font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.titlebar .spacer{flex:1}
+.win-btns{display:flex;gap:12px;color:var(--ink-3);font-size:11px;letter-spacing:1px}
+
+.notes{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-c);padding:18px 18px 16px}
+.notes h4{font-size:11px;letter-spacing:.1em;color:var(--ink-3);font-weight:700;text-transform:uppercase;margin-bottom:12px}
+.notes ul{list-style:none;display:flex;flex-direction:column;gap:11px}
+.notes li{font-size:14px;line-height:1.7;color:var(--ink-2);padding-left:13px;position:relative}
+.notes li::before{content:"";position:absolute;left:0;top:7px;width:4px;height:4px;border-radius:50%;background:var(--green)}
+.notes li b{color:var(--ink);font-weight:600}
+
+/* ============ 主窗 ============ */
+.app{display:flex;height:600px}
+.side{width:204px;flex:0 0 204px;border-right:1px solid var(--line);background:var(--surface-2);display:flex;flex-direction:column;padding:18px 12px 12px}
+.brand{display:flex;align-items:center;gap:10px;padding:0 8px 16px}
+.logo{width:30px;height:30px;border-radius:9px;background:var(--green);display:grid;place-items:center;color:#fff;font-family:var(--font-display);font-size:16px;font-weight:700}
+.brand-txt b{display:block;font-size:15px;letter-spacing:.04em}
+.brand-txt span{font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+
+.side-label{font-size:12px;letter-spacing:.08em;color:var(--ink-3);font-weight:700;padding:10px 10px 7px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;font-size:14px;color:var(--ink-2);cursor:pointer;transition:all .15s ease}
+.nav-item:hover{background:var(--paper-2);color:var(--ink)}
+.nav-item.on{background:var(--green-soft);color:var(--green);font-weight:700}
+.nav-item .ico{width:15px;height:15px;opacity:.9;display:grid;place-items:center;font-size:12px}
+.nav-item .count{margin-left:auto;font-size:12px;color:var(--ink-2)}
+.nav-item.on .count{color:var(--green)}
+.side-div{height:1px;background:var(--line);margin:10px 8px}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:4px;padding-top:10px}
+
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.main-top{display:flex;align-items:center;gap:12px;padding:16px 20px 12px}
+.main-top h3{font-family:var(--font-display);font-size:22px;font-weight:700}
+.main-top .sub{font-size:12.5px;color:var(--ink-3);margin-left:2px}
+.grow{flex:1}
+.search{position:relative}
+.search input{
+  width:180px;height:32px;border-radius:9px;border:1px solid var(--line);background:var(--surface-2);
+  padding:0 12px 0 31px;font-size:13.5px;color:var(--ink);font-family:inherit;outline:none;transition:all .18s ease;
+}
+.search input:focus{border-color:var(--green);background:var(--surface);width:210px}
+.search .mag{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--ink-3)}
+.btn-primary{
+  height:32px;padding:0 15px;border-radius:9px;border:none;background:var(--green);color:#fff;
+  font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;
+  transition:all .18s ease;
+}
+.btn-primary:hover{background:var(--green-2)}
+
+.list{flex:1;overflow-y:auto;padding:2px 12px 12px}
+.group-head{display:flex;align-items:center;gap:8px;padding:14px 10px 7px;position:sticky;top:0;background:var(--surface);z-index:2}
+.group-head b{font-size:12.5px;letter-spacing:.06em;color:var(--ink-3);font-weight:700}
+.group-head .line{flex:1;height:1px;background:var(--line)}
+.group-head span{font-size:11.5px;color:var(--ink-3)}
+
+.row{
+  display:flex;align-items:flex-start;gap:12px;padding:12px 10px;border-radius:10px;cursor:pointer;
+  transition:background .15s ease;position:relative;
+}
+.row:hover{background:var(--surface-2)}
+.row.pinned{background:linear-gradient(90deg,var(--green-soft),transparent 72%)}
+.row.pinned::before{content:"";position:absolute;left:3px;top:14px;bottom:14px;width:2px;border-radius:2px;background:var(--green)}
+.tick{
+  width:17px;height:17px;border-radius:50%;border:1.5px solid var(--line-strong);margin-top:2px;flex:0 0 17px;
+  display:grid;place-items:center;transition:all .16s ease;background:transparent;
+}
+.row:hover .tick{border-color:var(--green)}
+.tick.done{background:var(--green);border-color:var(--green);color:#fff;font-size:10px}
+.row-main{flex:1;min-width:0}
+.row-title{font-size:14.5px;line-height:1.45;display:flex;align-items:center;gap:7px}
+.row-title .star{color:var(--green);font-size:12px}
+.row.done .row-title{color:var(--ink-3);text-decoration:line-through;text-decoration-thickness:1px}
+.tags{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.tag{font-size:11.5px;padding:2px 7px;border-radius:5px;background:var(--paper-2);color:var(--ink-2)}
+.tag.green{background:var(--green-soft);color:var(--green);font-weight:700}
+.tag.warn{background:var(--amber-soft);color:var(--amber)}
+.row-time{font-size:12.5px;color:var(--ink-2);white-space:nowrap;margin-top:3px;letter-spacing:.02em}
+.row-time.over{color:var(--amber)}
+
+.main-foot{display:flex;align-items:center;gap:14px;padding:11px 20px;border-top:1px solid var(--line);background:var(--surface-2);font-size:12.5px;color:var(--ink-2)}
+.foot-switch{display:flex;align-items:center;gap:7px;cursor:pointer}
+.switch{width:30px;height:17px;border-radius:999px;background:var(--line-strong);position:relative;transition:all .2s ease}
+.switch::after{content:"";position:absolute;width:13px;height:13px;border-radius:50%;background:#fff;top:2px;left:2px;transition:all .2s ease;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.switch.on{background:var(--green)}
+.switch.on::after{left:15px}
+.foot-link{margin-left:auto;color:var(--ink-2);cursor:pointer;border-bottom:1px dashed var(--line-strong);padding-bottom:1px}
+.foot-link:hover{color:var(--green);border-color:var(--green)}
+
+/* ============ 空状态 ============ */
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px}
+.empty-art{width:96px;height:96px;border-radius:28px;background:var(--surface-2);border:1px solid var(--line);display:grid;place-items:center;position:relative}
+.empty-art .ring{width:38px;height:38px;border-radius:50%;border:2px dashed var(--line-strong)}
+.empty-art .dot{position:absolute;width:8px;height:8px;border-radius:50%;background:var(--green);top:22px;right:26px}
+.empty h4{font-family:var(--font-display);font-size:21px;font-weight:700}
+.empty p{font-size:14px;color:var(--ink-2);text-align:center;line-height:1.7}
+.kbd-row{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--ink-3);margin-top:4px}
+.kbd{font-size:11.5px;padding:3px 7px;border-radius:5px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink-2);box-shadow:0 1.5px 0 var(--line-strong)}
+
+/* ============ 快速添加 ============ */
+.quick{position:relative;padding:34px 26px 30px;background:var(--paper-2)}
+.quick-wrap{
+  max-width:620px;margin:0 auto;background:var(--surface);border:1px solid var(--line-strong);border-radius:16px;
+  box-shadow:0 26px 60px -26px var(--shadow);padding:20px 22px 16px;
+}
+.quick-row{display:flex;align-items:center;gap:12px}
+.quick-plus{width:30px;height:30px;border-radius:9px;background:var(--green-soft);color:var(--green);display:grid;place-items:center;font-size:16px;font-weight:700}
+.quick-input{flex:1;border:none;outline:none;background:transparent;font-size:18px;color:var(--ink);font-family:var(--font-body);letter-spacing:.01em}
+.quick-input::placeholder{color:var(--ink-3)}
+.caret{width:1.5px;height:20px;background:var(--green);animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.quick-meta{display:flex;align-items:center;gap:8px;margin-top:14px;padding-left:42px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;padding:4px 10px;border-radius:999px;background:var(--green-soft);color:var(--green);font-weight:700}
+.pill.neutral{background:var(--paper-2);color:var(--ink-2);font-weight:400}
+.pill i{font-style:normal;opacity:.65}
+.quick-tip{margin-left:auto;font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
+
+/* ============ 提醒卡片 ============ */
+.card-stage{background:var(--paper-2);padding:44px 26px;display:flex;justify-content:flex-end}
+.reminder{
+  width:400px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-c);
+  box-shadow:0 26px 56px -20px var(--shadow),0 2px 8px var(--shadow-soft);
+  padding:18px 18px 16px;position:relative;overflow:hidden;
+}
+.reminder::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--green)}
+.rem-top{display:flex;align-items:flex-start;gap:10px}
+.rem-top h4{font-size:16.5px;font-weight:700;line-height:1.4;flex:1}
+.rem-close{width:22px;height:22px;border-radius:50%;border:none;background:transparent;color:var(--ink-3);cursor:pointer;font-size:13px;line-height:1;display:grid;place-items:center;transition:all .15s ease}
+.rem-close:hover{background:var(--paper-2);color:var(--ink)}
+.rem-time{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:var(--green)}
+.rem-time .dot{width:5px;height:5px;border-radius:50%;background:var(--green)}
+.rem-time.over{color:var(--amber)}
+.rem-time.over .dot{background:var(--amber)}
+.rem-note{margin-top:9px;font-size:13px;color:var(--ink-2);line-height:1.65;padding-right:6px}
+.rem-actions{display:flex;gap:8px;margin-top:18px}
+.pill-btn{
+  height:32px;padding:0 13px;border-radius:999px;border:1px solid var(--line-strong);background:var(--surface);
+  color:var(--ink);font-size:13px;cursor:pointer;font-family:inherit;transition:all .16s ease;white-space:nowrap;
+}
+.pill-btn:hover{border-color:var(--green);color:var(--green);background:var(--green-soft)}
+.pill-btn.primary{background:var(--green);border-color:var(--green);color:#fff;font-weight:600}
+.pill-btn.primary:hover{background:var(--green-2);color:#fff}
+
+/* ============ 遮罩 ============ */
+.overlay-stage{position:relative;height:430px;border-radius:var(--radius-w);overflow:hidden;background:
+  radial-gradient(1200px 500px at 70% 20%, #3a4a52, #1b2024 60%);}
+.overlay-dim{position:absolute;inset:0;background:rgba(12,14,16,.62);backdrop-filter:blur(2px)}
+.overlay-badge{position:absolute;top:22px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:.18em;color:rgba(255,255,255,.5);text-transform:uppercase}
+.overlay-stage .reminder{position:absolute;right:26px;bottom:26px;box-shadow:0 30px 70px rgba(0,0,0,.5)}
+.dim-hint{position:absolute;left:26px;bottom:26px;color:rgba(255,255,255,.55);font-size:12px;line-height:1.8}
+.dim-hint b{color:#fff;font-weight:600}
+
+/* ============ 编辑窗 ============ */
+.form{background:var(--surface);padding:22px 24px 18px}
+.form-sec{margin-bottom:20px}
+.form-sec-label{font-size:12px;letter-spacing:.08em;color:var(--ink-3);font-weight:700;margin-bottom:10px}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:12.5px;color:var(--ink-2);margin-bottom:6px}
+.input,.select{
+  width:100%;height:36px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);
+  padding:0 12px;font-size:14px;color:var(--ink);font-family:inherit;outline:none;transition:all .16s ease;
+}
+.input:focus,.select:focus{border-color:var(--green);background:var(--surface)}
+.textarea{height:64px;padding:9px 12px;resize:none;line-height:1.6}
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:12px}
+.grid2b{display:grid;grid-template-columns:1fr 72px;gap:10px;align-items:end}
+.unit{height:36px;display:grid;place-items:center;font-size:12px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);border-radius:8px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12.5px;padding:6px 11px;border-radius:7px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2);cursor:pointer;transition:all .15s ease}
+.chip:hover{border-color:var(--green)}
+.chip.on{background:var(--green-soft);border-color:var(--green);color:var(--green);font-weight:600}
+.chip.off{opacity:.45;cursor:default}
+.form-foot{display:flex;justify-content:flex-end;gap:9px;padding-top:6px}
+.btn-ghost{height:36px;padding:0 18px;border-radius:8px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-size:12.5px;cursor:pointer;font-family:inherit}
+.btn-ghost:hover{border-color:var(--ink-3)}
+
+/* ============ 设置 ============ */
+.settings{padding:22px 24px}
+.slider-wrap{display:flex;align-items:center;gap:14px}
+.slider{flex:1;height:4px;border-radius:999px;background:var(--line);position:relative}
+.slider .fill{position:absolute;left:0;top:0;bottom:0;width:59%;border-radius:999px;background:var(--green)}
+.slider .knob{position:absolute;left:59%;top:50%;transform:translate(-50%,-50%);width:15px;height:15px;border-radius:50%;background:var(--surface);border:2px solid var(--green);box-shadow:0 2px 5px var(--shadow-soft)}
+.slider-val{font-size:13.5px;color:var(--ink);min-width:42px;text-align:right;font-weight:700}
+.img-box{display:flex;gap:14px;align-items:center;margin-top:10px}
+.img-thumb{width:120px;height:68px;border-radius:8px;border:1px dashed var(--line-strong);display:grid;place-items:center;font-size:11px;color:var(--ink-3);background:var(--surface-2);overflow:hidden;position:relative}
+.img-thumb.has{background:linear-gradient(135deg,#6b8a7d,#39544a);border-style:solid;border-color:transparent}
+.img-actions{display:flex;flex-direction:column;gap:8px}
+.hint-text{font-size:12.5px;color:var(--ink-3);line-height:1.65;margin-top:8px}
+
+/* 底部说明 */
+.footer-note{margin-top:70px;padding:24px 26px;border:1px solid var(--line);border-radius:var(--radius-c);background:var(--surface)}
+.footer-note h4{font-family:var(--font-display);font-size:17px;margin-bottom:12px}
+.footer-note p{font-size:12.5px;color:var(--ink-2);line-height:1.85;margin-bottom:8px}
+.footer-note code{font-family:var(--font-num);background:var(--paper-2);padding:1px 6px;border-radius:4px;font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="hero">
+    <div>
+      <h1>小叮 · <em>UI 设计预览</em></h1>
+      <p>纸感暖白 + 墨绿。安静、可靠、不吵闹的桌面伙伴。所有画面按现有功能重排，不新增功能点，只调整结构、层级与细节。</p>
+    </div>
+    <div class="hero-actions">
+      <button class="toggle active" data-set="light">浅色</button>
+      <button class="toggle" data-set="dark">深色</button>
+    </div>
+  </header>
+
+  <div class="meta">
+    <div class="meta-item"><b>设计方向</b><span>温润纸感 · 克制墨绿 · 手写标题</span></div>
+    <div class="meta-item"><b>替换原因</b><span>当前是系统控件拼装，层级弱、信息挤</span></div>
+    <div class="meta-item"><b>画面对应</b><span>7 个场景，覆盖全部功能入口</span></div>
+  </div>
+
+  <div class="swatches">
+    <div class="sw"><i style="background:#1F5C4A"></i><div><b>墨绿</b><br><span>#1F5C4A</span></div></div>
+    <div class="sw"><i style="background:#F6F3EC"></i><div><b>纸底</b><br><span>#F6F3EC</span></div></div>
+    <div class="sw"><i style="background:#FFFDF8"></i><div><b>卡片</b><br><span>#FFFDF8</span></div></div>
+    <div class="sw"><i style="background:#221F1A"></i><div><b>墨字</b><br><span>#221F1A</span></div></div>
+    <div class="sw"><i style="background:#B4562A"></i><div><b>赭红</b><br><span>#B4562A</span></div></div>
+  </div>
+
+  <!-- 1 主窗 -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">01</span>
+      <h2>主窗口</h2>
+      <span class="badge">结构重排</span>
+    </div>
+    <p class="scene-desc">把「分组下拉 + 4 个视图按钮 + 搜索 + 2 个按钮」的顶栏拆开：左侧独立成导航栏，承担视图与分组两个维度；右侧只保留标题、搜索、新建。列表改为分组分段，任务行内自带标签，信息不再依赖 6 列表格。</p>
+
+    <div class="stage">
+      <div class="frame">
+        <div class="titlebar">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <b>小叮</b><div class="spacer"></div>
+          <div class="win-btns"><span>—</span><span>▢</span><span>✕</span></div>
+        </div>
+        <div class="app">
+          <aside class="side">
+            <div class="brand">
+              <div class="logo">叮</div>
+              <div class="brand-txt"><b>小叮</b><span>今天 · 11月22日</span></div>
+            </div>
+            <div class="side-label">视图</div>
+            <nav class="nav">
+              <div class="nav-item on"><span class="ico">☀</span>今天<span class="count">3</span></div>
+              <div class="nav-item"><span class="ico">!</span>逾期<span class="count">1</span></div>
+              <div class="nav-item"><span class="ico">≡</span>全部<span class="count">8</span></div>
+              <div class="nav-item"><span class="ico">✓</span>已完成<span class="count">4</span></div>
+            </nav>
+            <div class="side-div"></div>
+            <div class="side-label">分组</div>
+            <nav class="nav">
+              <div class="nav-item"><span class="ico">●</span>工作<span class="count">4</span></div>
+              <div class="nav-item"><span class="ico">●</span>学习<span class="count">3</span></div>
+              <div class="nav-item"><span class="ico">●</span>生活<span class="count">1</span></div>
+            </nav>
+            <div class="side-foot">
+              <div class="nav-item theme-toggle"><span class="ico">◐</span>深色模式</div>
+              <div class="nav-item"><span class="ico">⚙</span>设置</div>
+            </div>
+          </aside>
+
+          <main class="main">
+            <div class="main-top">
+              <h3>今天</h3><span class="sub">3 项待办</span>
+              <div class="grow"></div>
+              <div class="search"><span class="mag">⌕</span><input placeholder="搜索任务"></div>
+              <button class="btn-primary">＋ 新建</button>
+            </div>
+
+            <div class="list">
+              <div class="group-head"><b>工作</b><span class="line"></span><span>2</span></div>
+
+              <div class="row pinned">
+                <div class="tick"></div>
+                <div class="row-main">
+                  <div class="row-title"><span class="star">★</span>提交本周周报</div>
+                  <div class="tags"><span class="tag green">工作</span><span class="tag">卡片</span><span class="tag">不重复</span></div>
+                </div>
+                <div class="row-time over">今天 18:30</div>
+              </div>
+
+              <div class="row">
+                <div class="tick"></div>
+                <div class="row-main">
+                  <div class="row-title">同步设计评审结论</div>
+                  <div class="tags"><span class="tag green">工作</span><span class="tag">全屏</span><span class="tag">每周五</span></div>
+                </div>
+                <div class="row-time">明天 10:00</div>
+              </div>
+
+              <div class="group-head"><b>学习</b><span class="line"></span><span>1</span></div>
+
+              <div class="row">
+                <div class="tick"></div>
+                <div class="row-main">
+                  <div class="row-title">背单词 30 个</div>
+                  <div class="tags"><span class="tag green">学习</span><span class="tag">卡片</span><span class="tag">每天</span></div>
+                </div>
+                <div class="row-time">今天 21:00</div>
+              </div>
+
+              <div class="group-head"><b>已完成</b><span class="line"></span><span>1</span></div>
+
+              <div class="row done">
+                <div class="tick done">✓</div>
+                <div class="row-main">
+                  <div class="row-title">买牛奶</div>
+                  <div class="tags"><span class="tag">生活</span><span class="tag">卡片</span></div>
+                </div>
+                <div class="row-time">今天 19:44</div>
+              </div>
+            </div>
+
+            <div class="main-foot">
+              <div class="foot-switch"><span class="switch"></span>暂停全部提醒</div>
+              <div class="foot-switch"><span class="switch on"></span>开机自启</div>
+              <span class="foot-link">清理已完成</span>
+            </div>
+          </main>
+        </div>
+      </div>
+
+      <aside class="notes">
+        <h4>关键改动</h4>
+        <ul>
+          <li><b>视图与分组分离</b>：左侧导航用视觉层级区分两层筛选，不再挤在顶栏。</li>
+          <li><b>列表去表格化</b>：6 列压成 3 个层级，分组标题吸顶。</li>
+          <li><b>置顶有底色</b>：左侧 2px 墨绿竖条 + 淡绿渐变，一眼可见。</li>
+          <li><b>逾期用赭红</b>：只染时间，不染整行。</li>
+          <li><b>底部收拢</b>：开关与「清理已完成」合成一条状态栏。</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 2 空状态 -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">02</span>
+      <h2>空状态</h2>
+      <span class="badge">新增画面</span>
+    </div>
+    <p class="scene-desc">现在没有任务时是一片空白表格。补一个安静的引导页，把快捷键和能力说清楚，不打扰。</p>
+
+    <div class="stage">
+      <div class="frame">
+        <div class="titlebar">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <b>小叮</b><div class="spacer"></div>
+          <div class="win-btns"><span>—</span><span>▢</span><span>✕</span></div>
+        </div>
+        <div class="app">
+          <aside class="side">
+            <div class="brand">
+              <div class="logo">叮</div>
+              <div class="brand-txt"><b>小叮</b><span>今天 · 11月22日</span></div>
+            </div>
+            <div class="side-label">视图</div>
+            <nav class="nav">
+              <div class="nav-item on"><span class="ico">☀</span>今天<span class="count">0</span></div>
+              <div class="nav-item"><span class="ico">!</span>逾期<span class="count">0</span></div>
+              <div class="nav-item"><span class="ico">≡</span>全部<span class="count">0</span></div>
+              <div class="nav-item"><span class="ico">✓</span>已完成<span class="count">0</span></div>
+            </nav>
+            <div class="side-foot">
+              <div class="nav-item theme-toggle"><span class="ico">◐</span>深色模式</div>
+              <div class="nav-item"><span class="ico">⚙</span>设置</div>
+            </div>
+          </aside>
+          <main class="main">
+            <div class="main-top">
+              <h3>今天</h3><span class="sub">0 项待办</span>
+              <div class="grow"></div>
+              <div class="search"><span class="mag">⌕</span><input placeholder="搜索任务"></div>
+              <button class="btn-primary">＋ 新建</button>
+            </div>
+            <div class="empty">
+              <div class="empty-art"><div class="ring"></div><div class="dot"></div></div>
+              <h4>今天还没有安排</h4>
+              <p>按快捷键随手记一条，剩下的交给小叮。</p>
+              <div class="kbd-row"><span class="kbd">Ctrl</span><span class="kbd">Alt</span><span class="kbd">N</span><span>快速添加</span></div>
+            </div>
+          </main>
+        </div>
+      </div>
+
+      <aside class="notes">
+        <h4>关键改动</h4>
+        <ul>
+          <li><b>不空洞</b>：几何标记 + 一句轻文案，保留品牌感。</li>
+          <li><b>教一次快捷键</b>：用键帽样式，比一行灰字更醒目。</li>
+          <li><b>不抢操作</b>：仍有右上角新建按钮。</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 3 快速添加 -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">03</span>
+      <h2>快速添加</h2>
+      <span class="badge">视觉升级</span>
+    </div>
+    <p class="scene-desc">功能不变，但把「输入 → 解析 → 提交」的过程做得可读：解析结果变成胶囊，用户能一眼确认时间和分组是否识别正确。</p>
+
+    <div class="stage">
+      <div class="frame">
+        <div class="titlebar">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <b>快速添加</b><div class="spacer"></div>
+          <div class="win-btns"><span>✕</span></div>
+        </div>
+        <div class="quick">
+          <div class="quick-wrap">
+            <div class="quick-row">
+              <div class="quick-plus">＋</div>
+              <div class="quick-input">明天9点 交周报 #工作<span class="caret"></span></div>
+            </div>
+            <div class="quick-meta">
+              <span class="pill">明天 09:00</span>
+              <span class="pill neutral">分组 · 工作</span>
+              <span class="pill neutral">标题 · 交周报</span>
+              <span class="quick-tip">回车保存 · Esc 取消</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="notes">
+        <h4>关键改动</h4>
+        <ul>
+          <li><b>字号 17px</b>：一眼看清自己敲了什么。</li>
+          <li><b>解析成胶囊</b>：时间、分组、标题三段分开，错了立刻发现。</li>
+          <li><b>输入区留白</b>：与环境分离，不抢工作焦点。</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 4 提醒卡片 -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">04</span>
+      <h2>右下角提醒卡片</h2>
+      <span class="badge">视觉升级</span>
+    </div>
+    <p class="scene-desc">保持尺寸与位置逻辑不变，重做视觉：左侧竖线标识，时间行带状态点，主次按钮分级。关闭按钮弱化，避免误触。</p>
+
+    <div class="stage">
+      <div class="frame">
+        <div class="titlebar">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <b>桌面 · 右下角</b><div class="spacer"></div>
+          <div class="win-btns"><span>—</span><span>▢</span><span>✕</span></div>
+        </div>
+        <div class="card-stage">
+          <div class="reminder">
+            <div class="rem-top">
+              <h4>提交本周周报</h4>
+              <button class="rem-close">✕</button>
+            </div>
+            <div class="rem-time over"><span class="dot"></span>今天 18:30 · 已到期</div>
+            <div class="rem-note">同步本周进度到共享盘，周五前必须提交。</div>
+            <div class="rem-actions">
+              <button class="pill-btn primary">已完成</button>
+              <button class="pill-btn">延后 5 分钟</button>
+              <button class="pill-btn">延后 10 分钟</button>
+              <button class="pill-btn">自定义</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="notes">
+        <h4>关键改动</h4>
+        <ul>
+          <li><b>左侧墨绿竖线</b>：卡片不再是浮在白底上的方块。</li>
+          <li><b>按钮分级</b>：完成是实心，延后是描边，主次明确。</li>
+          <li><b>关闭弱化</b>：灰色小叉，悬停才加深，减少误触。</li>
+          <li><b>时间带状态点</b>：绿色=进行中，赭红=已逾期。</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 5 全屏遮罩 -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">05</span>
+      <h2>全屏强提醒</h2>
+      <span class="badge">视觉升级</span>
+    </div>
+    <p class="scene-desc">遮罩本身很克制：深色压暗 + 轻微模糊，不抢卡片的注意力。卡片仍在右下角，与轻提醒完全一致，只有「没有关闭」这一处差异。</p>
+
+    <div class="stage">
+      <div class="frame">
+        <div class="titlebar">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <b>主显示器 · 全屏遮罩</b><div class="spacer"></div>
+          <div class="win-btns"><span>—</span><span>▢</span><span>✕</span></div>
+        </div>
+        <div class="overlay-stage">
+          <div class="overlay-dim"></div>
+          <div class="overlay-badge">全屏提醒 · 处理后才能继续</div>
+          <div class="dim-hint">未设置背景图时为纯色蒙布<br>可在设置里调暗度或换成图片</div>
+          <div class="reminder">
+            <div class="rem-top">
+              <h4>登录内网系统提交周报</h4>
+            </div>
+            <div class="rem-time over"><span class="dot"></span>今天 18:30 · 已逾期 12 分钟</div>
+            <div class="rem-note">这一步必须今天完成，否则影响下周排期。</div>
+            <div class="rem-actions">
+              <button class="pill-btn primary">已完成</button>
+              <button class="pill-btn">延后 5 分钟</button>
+              <button class="pill-btn">延后 10 分钟</button>
+              <button class="pill-btn">自定义</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="notes">
+        <h4>关键改动</h4>
+        <ul>
+          <li><b>遮罩更深</b>：不透明感更强，强调「必须处理」。</li>
+          <li><b>卡片一致</b>：与轻提醒同一外观，只去掉关闭按钮。</li>
+          <li><b>顶部一行提示</b>：说明当前状态，不喧宾夺主。</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 6 编辑窗 -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">06</span>
+      <h2>新建 / 编辑任务</h2>
+      <span class="badge mid">结构重排</span>
+    </div>
+    <p class="scene-desc">字段一个不少，但按「内容 → 时间 → 重复 → 提醒方式」分成四块，用留白和小标题分隔，不再是一列密集控件。</p>
+
+    <div class="stage">
+      <div class="frame">
+        <div class="titlebar">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <b>编辑任务</b><div class="spacer"></div>
+          <div class="win-btns"><span>✕</span></div>
+        </div>
+        <div class="form">
+          <div class="form-sec">
+            <div class="form-sec-label">内容</div>
+            <div class="field"><label>任务内容</label><input class="input" value="提交本周周报"></div>
+            <div class="field"><label>备注</label><textarea class="input textarea">同步本周进度到共享盘</textarea></div>
+            <div class="field"><label>分组</label><input class="input" value="工作"></div>
+          </div>
+
+          <div class="form-sec">
+            <div class="form-sec-label">时间</div>
+            <div class="grid2">
+              <div class="field"><label>日期</label><input class="input" value="2026-11-22"></div>
+              <div class="field"><label>时间</label><input class="input" value="18:30"></div>
+            </div>
+            <div class="grid2b">
+              <div class="field" style="margin:0"><label>提前提醒</label><input class="input" value="0"></div>
+              <div class="field" style="margin:0"><label>&nbsp;</label><div class="unit">分钟</div></div>
+            </div>
+          </div>
+
+          <div class="form-sec">
+            <div class="form-sec-label">重复</div>
+            <div class="chips">
+              <span class="chip">不重复</span>
+              <span class="chip on">每天</span>
+              <span class="chip">每周</span>
+              <span class="chip">工作日</span>
+              <span class="chip">自定义星期</span>
+              <span class="chip">每月某日</span>
+              <span class="chip">每 N 天</span>
+            </div>
+          </div>
+
+          <div class="form-sec" style="margin-bottom:8px">
+            <div class="form-sec-label" style="display:flex;justify-content:space-between;align-items:center">
+              <span>提醒方式</span>
+              <span class="foot-switch" style="font-weight:400;letter-spacing:0;color:var(--ink-2)"><span class="switch on"></span>启用此任务</span>
+            </div>
+            <div class="chips">
+              <span class="chip on">右下角卡片</span>
+              <span class="chip">全屏遮罩</span>
+            </div>
+          </div>
+
+          <div class="form-foot">
+            <button class="btn-ghost">取消</button>
+            <button class="btn-primary">保存</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="notes">
+        <h4>关键改动</h4>
+        <ul>
+          <li><b>四段式分组</b>：内容 / 时间 / 重复 / 提醒方式。</li>
+          <li><b>重复改胶囊</b>：7 种规则一眼可见，不用展开下拉。</li>
+          <li><b>输入框 36px</b>：触控和鼠标都更稳。</li>
+          <li><b>保存右对齐</b>：符合桌面习惯。</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 7 设置 -->
+  <section class="scene">
+    <div class="scene-head">
+      <span class="scene-num">07</span>
+      <h2>提醒设置</h2>
+      <span class="badge">视觉升级</span>
+    </div>
+    <p class="scene-desc">暗度调节加上可视化滑块与数值，背景图换成缩略图预览，选完能立刻看到效果。</p>
+
+    <div class="stage">
+      <div class="frame">
+        <div class="titlebar">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <b>提醒设置</b><div class="spacer"></div>
+          <div class="win-btns"><span>✕</span></div>
+        </div>
+        <div class="settings">
+          <div class="form-sec">
+            <div class="form-sec-label">全屏遮罩</div>
+            <div class="field">
+              <label>遮罩暗度</label>
+              <div class="slider-wrap">
+                <div class="slider"><div class="fill"></div><div class="knob"></div></div>
+                <div class="slider-val">59%</div>
+              </div>
+              <div class="hint-text">数值越大，遮罩越暗。没有背景图时是纯色蒙布。</div>
+            </div>
+          </div>
+
+          <div class="form-sec" style="margin-bottom:10px">
+            <div class="form-sec-label">背景图片</div>
+            <div class="img-box">
+              <div class="img-thumb has"></div>
+              <div class="img-actions">
+                <button class="btn-ghost" style="height:30px;padding:0 14px;font-size:12px">更换图片</button>
+                <button class="btn-ghost" style="height:30px;padding:0 14px;font-size:12px">清除</button>
+              </div>
+            </div>
+            <div class="hint-text">图片按屏幕比例铺满，再叠加遮罩暗度。</div>
+          </div>
+
+          <div class="form-foot">
+            <button class="btn-ghost">取消</button>
+            <button class="btn-primary">保存</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="notes">
+        <h4>关键改动</h4>
+        <ul>
+          <li><b>滑块可视化</b>：拖动即调，右侧显示百分比。</li>
+          <li><b>背景缩略图</b>：选完立刻看到，不用闭眼猜。</li>
+          <li><b>说明文案轻量</b>：不抢视线。</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <div class="footer-note">
+    <h4>落地说明</h4>
+    <p><b>能直接做：</b>配色、字体层级、圆角、按钮分级、卡片与遮罩重绘、空状态、编辑窗分区、分组侧栏 —— 这些都用现有自绘能力实现，没有新增依赖。</p>
+    <p><b>需要改造：</b>主窗列表要从 <code>ListView</code> 换成自绘滚动面板，才能做行内标签和分组吸顶；预计新增 300–500 行绘制代码，性能仍是本地绘制，开销可控。</p>
+    <p><b>不建议做：</b>毛玻璃模糊（需要 DWM 调用，Win10 老版本效果不一致）、Web 字体（WinForms 依赖系统字体，落地用系统自带字体）。</p>
+    <p><b>字体：</b>全应用统一 <code>微软雅黑 UI</code>。楷体等书法字体笔画过细，9-11pt 小字号下会断裂发虚；微软雅黑 UI 笔画等宽、专为界面小字优化，Win10/11 自带。数字 <code>Segoe UI</code>。均为系统可用，不额外打包。</p>
+  </div>
+
+</div>
+
+<script>
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme);
+  document.querySelectorAll('.toggle').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-set') === theme);
+  });
+}
+
+document.querySelectorAll('.toggle').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    applyTheme(btn.getAttribute('data-set'));
+  });
+});
+
+document.querySelectorAll('.theme-toggle').forEach(function(item){
+  item.addEventListener('click', function(){
+    var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+  });
+});
+
+document.querySelectorAll('.nav-item').forEach(function(item){
+  if(item.classList.contains('theme-toggle')) return;
+  item.addEventListener('click', function(){
+    item.parentElement.querySelectorAll('.nav-item').forEach(function(n){ n.classList.remove('on'); });
+    item.classList.add('on');
+  });
+});
+
+document.querySelectorAll('.row').forEach(function(row){
+  row.addEventListener('click', function(e){
+    if(e.target.classList.contains('tick')){
+      e.target.classList.toggle('done');
+      if(e.target.classList.contains('done')){ e.target.textContent = '✓'; }
+      else { e.target.textContent = ''; }
+      row.classList.toggle('done');
+      return;
+    }
+  });
+});
+
+document.querySelectorAll('.sw').forEach(function(sw){
+  sw.addEventListener('click', function(){
+    var hex = sw.querySelector('span').textContent;
+    navigator.clipboard && navigator.clipboard.writeText(hex);
+  });
+});
+</script>
+</body>
+</html>
