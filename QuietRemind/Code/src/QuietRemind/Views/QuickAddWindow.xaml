@@ -1,0 +1,172 @@
+<Window x:Class="QuietRemind.Views.QuickAddWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:hc="https://handyorg.github.io/handycontrol"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="快速新增任务"
+        Width="520" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        WindowStyle="None" Background="{DynamicResource BSurface}"
+        Foreground="{DynamicResource BInk}"
+        FontFamily="{StaticResource FontBody}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        PreviewKeyDown="OnPreviewKeyDown">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="50" ResizeBorderThickness="0" GlassFrameThickness="1"
+                            CornerRadius="0" UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="50" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题栏 -->
+        <Border Background="{DynamicResource BSurface}" BorderBrush="{DynamicResource BHairline}"
+                BorderThickness="0,0,0,1">
+            <DockPanel LastChildFill="False">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
+                    <Border Width="22" Height="22" Background="{DynamicResource BAccentSoft}" CornerRadius="7">
+                        <TextBlock Text="&#xE710;" FontFamily="{StaticResource FontIcon}" FontSize="11"
+                                   Foreground="{DynamicResource BAccent}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="快速新增" FontSize="12.5" FontWeight="SemiBold"
+                               Foreground="{DynamicResource BInkSoft}" Margin="9,0,0,0" VerticalAlignment="Center" />
+                    <Border Background="{DynamicResource BAccentSoft}" CornerRadius="999" Padding="8,2" Margin="9,0,0,0">
+                        <TextBlock Text="Ctrl + Alt + N" FontSize="9.5" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource BAccent}" />
+                    </Border>
+                </StackPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource CaptionCloseButton}" Height="50" Width="48"
+                        WindowChrome.IsHitTestVisibleInChrome="True"
+                        AutomationProperties.Name="取消快速新增" Click="OnCancel" ToolTip="取消">
+                    <TextBlock Text="&#xE8BB;" FontFamily="{StaticResource FontIcon}" FontSize="10" />
+                </Button>
+            </DockPanel>
+        </Border>
+
+        <!-- 表单 -->
+        <StackPanel Grid.Row="1" Margin="28,24,28,10">
+            <TextBlock Text="QUICK ADD" Style="{StaticResource OverlineText}" />
+            <TextBlock Text="记下一件事" Style="{StaticResource DisplayTitle}" FontSize="24" Margin="0,4,0,0" />
+            <TextBlock Text="只填必要信息，保存后立即进入提醒队列" Style="{StaticResource BodyMuted}"
+                       Margin="0,5,0,0" />
+
+            <TextBlock Text="任务内容" Style="{StaticResource FieldLabel}" Margin="0,22,0,6" />
+            <Grid>
+                <hc:TextBox x:Name="ContentBox" Style="{StaticResource FieldTextBox}" Height="48"
+                            FontSize="15" Text="{Binding Content, UpdateSourceTrigger=PropertyChanged}"
+                            MaxLength="200" />
+                <TextBlock Text="例如：17:30 提交周报" IsHitTestVisible="False" FontSize="14"
+                           Foreground="{DynamicResource BFaint}" Margin="14,0,0,0" VerticalAlignment="Center">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Content}" Value="">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+
+            <TextBlock Text="提醒规则" Style="{StaticResource FieldLabel}" Margin="0,18,0,6" />
+            <Border Background="{DynamicResource BSegmentTrack}" CornerRadius="11" Padding="3">
+                <UniformGrid Columns="2">
+                    <RadioButton x:Name="OnceRadio" Content="单次" Style="{StaticResource SegmentRadio}" Checked="OnOnceChecked" />
+                    <RadioButton x:Name="DailyRadio" Content="每天" Style="{StaticResource SegmentRadio}" Checked="OnDailyChecked" />
+                </UniformGrid>
+            </Border>
+
+            <!-- 单次：日期 + 时刻 -->
+            <Grid Margin="0,16,0,0" Visibility="{Binding IsOnce, Converter={StaticResource BoolToVis}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.2*" />
+                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="1*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="日期" Style="{StaticResource FieldLabel}" />
+                    <Grid>
+                        <hc:DatePicker x:Name="QuickDatePicker" Style="{StaticResource FieldDatePicker}"
+                                       SelectedDate="{Binding SingleDate}" />
+                        <TextBlock Text="选择日期" IsHitTestVisible="False" FontSize="12"
+                                   Foreground="{DynamicResource BFaint}" Margin="12,0,34,0"
+                                   VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedDate, ElementName=QuickDatePicker}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="时刻" Style="{StaticResource FieldLabel}" />
+                    <hc:TimePicker Style="{StaticResource FieldTimePicker}"
+                                   SelectedTime="{Binding SelectedTime, Mode=TwoWay}" TimeFormat="HH:mm" />
+                </StackPanel>
+            </Grid>
+
+            <!-- 每天：仅时刻 -->
+            <Grid Margin="0,16,0,0" Visibility="{Binding IsDaily, Converter={StaticResource BoolToVis}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="180" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="时刻" Style="{StaticResource FieldLabel}" />
+                    <hc:TimePicker Style="{StaticResource FieldTimePicker}"
+                                   SelectedTime="{Binding SelectedTime, Mode=TwoWay}" TimeFormat="HH:mm" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Text="每天在所选时刻提醒一次" Style="{StaticResource FieldHint}"
+                           VerticalAlignment="Bottom" Margin="14,0,0,10" />
+            </Grid>
+
+            <Border Style="{StaticResource ErrorBanner}" Margin="0,16,0,0"
+                    Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE7BA;" FontFamily="{StaticResource FontIcon}" FontSize="13"
+                               Foreground="{DynamicResource BDanger}" VerticalAlignment="Top" Margin="0,1,0,0" />
+                    <TextBlock Grid.Column="1" Text="{Binding ErrorText}" Foreground="{DynamicResource BDanger}"
+                               FontSize="11.5" TextWrapping="Wrap" Margin="8,0,0,0" />
+                </Grid>
+            </Border>
+        </StackPanel>
+
+        <!-- 底部 -->
+        <Border Grid.Row="2" Background="{DynamicResource BSurfaceAlt}"
+                BorderBrush="{DynamicResource BHairline}" BorderThickness="0,1,0,0" Padding="28,13">
+            <DockPanel LastChildFill="False">
+                <TextBlock Text="Enter 保存 · Esc 取消" FontSize="10.5" Foreground="{DynamicResource BFaint}"
+                           VerticalAlignment="Center" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="取消" Width="78" Height="34" Style="{StaticResource SecondaryButton}"
+                            Click="OnCancel" />
+                    <Button Content="保存" Width="88" Height="34" Style="{StaticResource PrimaryButton}"
+                            Margin="8,0,0,0" Click="OnSave" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

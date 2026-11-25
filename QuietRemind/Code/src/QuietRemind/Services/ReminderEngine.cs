@@ -14,7 +14,8 @@ public enum SettleAction
 /// 判定基于"上次轮询时刻 _lastPoll"：
 ///   - 错过扫描：TriggerAt 早于上次轮询且早于当前 → 判错过（进程未运行/睡眠/时钟跳变期间到点；含已判错过未收尾的实例——补提醒弹窗期间进程死亡的场景，重启后仍覆盖）
 ///   - 触发判定：TriggerAt 落在 (上次轮询, 当前] → 正常到点提醒
-/// 时钟向前大跳（&gt;10s 且非睡眠）时整段过点实例按错过兜底（需求 5.1.2 第二条）。
+/// 时钟向前大跳（墙钟间隔 &gt;10s，且单调时钟同步推进不足 5s）时整段过点实例按错过兜底
+/// （需求 5.1.2 第二条）；单调时钟也同步推进的大间隔（UI 卡顿/睡眠）走常规路径，避免把正常到点误标为错过。
 /// 运行期内存态 _runtimeShown 记录"本次进程已弹过窗"的实例：进程重启即失效，
 /// 从而强杀/关机后已弹未收尾实例仍会被错过扫描覆盖（需求 5.1.4），同运行期内不误判（需求 5.1.2 第一条）。
 /// 提醒弹出本身不改变实例状态，仅收尾动作变更（需求 5.1.4）。
@@ -27,11 +28,21 @@ public class ReminderEngine
     /// <summary>首轮轮询时打开的正常触发窗口宽度（启动扫描与首轮之间的到点归入正常触发）。</summary>
     private static readonly TimeSpan InitialPollWindow = TimeSpan.FromSeconds(2);
 
+    /// <summary>墙钟大跳时，单调时钟推进不足该值才判定为“系统时钟被整体跳变”。</summary>
+    private const long MonotonicGapGraceMs = 5000;
+
     private readonly IClock _clock;
+    private readonly Func<long> _monotonicMs;
     private readonly HashSet<Guid> _runtimeShown = [];
     private DateTime _lastPoll = DateTime.MinValue;
+    private long _lastMonotonicMs;
 
-    public ReminderEngine(IClock clock) => _clock = clock;
+    public ReminderEngine(IClock clock, Func<long>? monotonicMs = null)
+    {
+        _clock = clock;
+        _monotonicMs = monotonicMs ?? (() => Environment.TickCount64);
+        _lastMonotonicMs = _monotonicMs();
+    }
 
     /// <summary>
     /// 提醒到期（同轮询周期的正常到点与错过实例合并为一次事件、一个提醒窗口，需求 3.4）。
@@ -39,10 +50,17 @@ public class ReminderEngine
     /// </summary>
     public event Action<IReadOnlyList<Occurrence>, IReadOnlyList<Occurrence>>? RemindersDue;
 
-    /// <summary>单次轮询：先错过扫描（过点未弹），再触发判定（本轮新到点）。停用任务的实例不参与（需求 2.3.4）。</summary>
-    public void Poll(List<Occurrence> occurrences, IReadOnlyList<ReminderTask> tasks)
+    /// <summary>提前提醒到期（仅托盘气泡，不打开全屏提醒；不改变实例状态）。</summary>
+    public event Action<IReadOnlyList<Occurrence>>? PreAlertsDue;
+
+    /// <summary>
+    /// 单次轮询：先错过扫描（过点未弹），再触发判定（本轮新到点）。停用任务的实例不参与（需求 2.3.4）。
+    /// preAlertMinutes = 0 时提前提醒零开销（不扫描）。
+    /// </summary>
+    public void Poll(List<Occurrence> occurrences, IReadOnlyList<ReminderTask> tasks, int preAlertMinutes = 0)
     {
         var now = _clock.Now;
+        var monotonicNow = _monotonicMs();
         var enabledIds = BuildEnabledIds(tasks);
         var missed = new List<Occurrence>();
         var due = new List<Occurrence>();
@@ -53,7 +71,11 @@ public class ReminderEngine
             _lastPoll = now - InitialPollWindow;
         }
 
-        if ((now - _lastPoll).TotalSeconds > ClockJumpThresholdSeconds)
+        // 只有“墙钟大幅前进、但单调时钟几乎没动”才是真正的系统时钟跳变；
+        // UI 卡顿/睡眠等大间隔走常规路径，本轮到点实例仍按正常提醒处理。
+        var wallGapSeconds = (now - _lastPoll).TotalSeconds;
+        var monotonicGap = monotonicNow - _lastMonotonicMs;
+        if (wallGapSeconds > ClockJumpThresholdSeconds && monotonicGap < MonotonicGapGraceMs)
         {
             // 时钟向前大跳：整段过点实例全部按错过兜底
             ScanMissedCore(occurrences, enabledIds, missed, now, now);
@@ -81,7 +103,58 @@ public class ReminderEngine
             RemindersDue?.Invoke(due, missed);
         }
 
+        // 提前提醒：仅当设置开启时扫描（=0 时零工作）
+        if (preAlertMinutes > 0)
+        {
+            var preAlerts = CollectPreAlerts(occurrences, enabledIds, now, preAlertMinutes);
+            if (preAlerts.Count > 0)
+            {
+                PreAlertsDue?.Invoke(preAlerts);
+            }
+        }
+
         _lastPoll = now;
+        _lastMonotonicMs = monotonicNow;
+    }
+
+    /// <summary>
+    /// 提前提醒补扫（启动 / 睡眠唤醒）：与轮询共用同一幂等标记 PreAlertShownAt。
+    /// </summary>
+    public void ScanPreAlerts(List<Occurrence> occurrences, IReadOnlyList<ReminderTask> tasks,
+        DateTime now, int preAlertMinutes)
+    {
+        if (preAlertMinutes <= 0)
+        {
+            return;
+        }
+        var alerts = CollectPreAlerts(occurrences, BuildEnabledIds(tasks), now, preAlertMinutes);
+        if (alerts.Count > 0)
+        {
+            PreAlertsDue?.Invoke(alerts);
+        }
+    }
+
+    /// <summary>
+    /// 收集需要提前提醒的实例（TriggerAt 在未来 N 分钟内），并立即写入已提醒标记。
+    /// 跳过：已提前提醒过、稍后提醒（TriggerAt 已偏离原计划）、本次运行期已弹窗、停用任务。
+    /// </summary>
+    private List<Occurrence> CollectPreAlerts(List<Occurrence> occurrences, HashSet<Guid> enabledIds,
+        DateTime now, int preAlertMinutes)
+    {
+        var threshold = now.AddMinutes(Math.Clamp(preAlertMinutes, 1, 120));
+        var alerts = occurrences.Where(o => o.State == OccurrenceState.Pending
+                && o.PreAlertShownAt is null
+                && o.TriggerAt == o.OriginalTriggerAt
+                && o.TriggerAt > now
+                && o.TriggerAt <= threshold
+                && !_runtimeShown.Contains(o.Id)
+                && enabledIds.Contains(o.TaskId))
+            .ToList();
+        foreach (var occurrence in alerts)
+        {
+            occurrence.PreAlertShownAt = now;
+        }
+        return alerts;
     }
 
     /// <summary>

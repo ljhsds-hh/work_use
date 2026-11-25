@@ -133,16 +133,50 @@ public class ReminderEngineTests
     [Fact]
     public void 时钟向前跳变_轮询兜底判错过()
     {
+        // 注入固定单调时钟：只有墙钟前进、单调时钟不动，才是真正的系统时钟跳变；避免测试环境停顿导致偶发失败
+        var mono = 0L;
+        var engine = new ReminderEngine(_clock, () => mono);
+        var missed = new List<Occurrence>();
+        engine.RemindersDue += (_, m) => missed.AddRange(m);
+
         var o = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
         var occs = new List<Occurrence> { o };
 
         _clock.Set(new DateTime(2026, 9, 18, 16, 0, 0));
-        _engine.Poll(occs, _tasks);
+        engine.Poll(occs, _tasks);
         _clock.Set(new DateTime(2026, 9, 18, 17, 0, 0)); // 时钟前跳 1 小时
-        _engine.Poll(occs, _tasks);
+        engine.Poll(occs, _tasks);
 
-        Assert.Single(_missed);
+        Assert.Single(missed);
         Assert.Equal(OccurrenceState.Missed, o.State);
+    }
+
+    [Fact]
+    public void 轮询间隔超10秒但进程持续运行_按正常到点不判错过()
+    {
+        // UI 卡顿等场景：墙钟间隔 >10s，但单调时钟同步推进 → 不应把本轮到点误标为“已错过”
+        var mono = 0L;
+        var engine = new ReminderEngine(_clock, () => mono);
+        var due = new List<Occurrence>();
+        var missed = new List<Occurrence>();
+        engine.RemindersDue += (d, m) =>
+        {
+            due.AddRange(d);
+            missed.AddRange(m);
+        };
+
+        var o = MakePending(new DateTime(2026, 9, 18, 16, 0, 10));
+        var occs = new List<Occurrence> { o };
+
+        _clock.Set(new DateTime(2026, 9, 18, 16, 0, 0));
+        engine.Poll(occs, _tasks);
+        mono += 15000;
+        _clock.Set(new DateTime(2026, 9, 18, 16, 0, 15));
+        engine.Poll(occs, _tasks);
+
+        Assert.Empty(missed);
+        Assert.Single(due);
+        Assert.Equal(OccurrenceState.Pending, o.State);
     }
 
     [Fact]
@@ -302,5 +336,106 @@ public class ReminderEngineTests
         _engine.Poll(occs, _tasks);
 
         Assert.Equal(2, _due.Count);
+    }
+
+    [Fact]
+    public void 提前提醒_进入窗口只发一次_不改变实例状态()
+    {
+        var o = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
+        var occs = new List<Occurrence> { o };
+        var alerts = new List<Occurrence>();
+        _engine.PreAlertsDue += list => alerts.AddRange(list);
+
+        _clock.Set(new DateTime(2026, 9, 18, 16, 46, 0));
+        _engine.Poll(occs, _tasks, preAlertMinutes: 5);
+
+        Assert.Single(alerts);
+        Assert.NotNull(o.PreAlertShownAt);
+        Assert.Equal(OccurrenceState.Pending, o.State); // 提前提醒不改变实例状态
+        Assert.Empty(_due);
+
+        // 下一轮不重复
+        _clock.Set(new DateTime(2026, 9, 18, 16, 47, 0));
+        _engine.Poll(occs, _tasks, preAlertMinutes: 5);
+        Assert.Single(alerts);
+    }
+
+    [Fact]
+    public void 提前提醒_关闭时零工作()
+    {
+        var o = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
+        var occs = new List<Occurrence> { o };
+        var alerts = new List<Occurrence>();
+        _engine.PreAlertsDue += list => alerts.AddRange(list);
+
+        _clock.Set(new DateTime(2026, 9, 18, 16, 49, 0));
+        _engine.Poll(occs, _tasks);
+
+        Assert.Empty(alerts);
+        Assert.Null(o.PreAlertShownAt);
+    }
+
+    [Fact]
+    public void 提前提醒_窗口边界含提前量整点()
+    {
+        var o = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
+        var occs = new List<Occurrence> { o };
+        var alerts = new List<Occurrence>();
+        _engine.PreAlertsDue += list => alerts.AddRange(list);
+
+        _clock.Set(new DateTime(2026, 9, 18, 16, 44, 59));
+        _engine.Poll(occs, _tasks, preAlertMinutes: 5);
+        Assert.Empty(alerts);
+
+        _clock.Set(new DateTime(2026, 9, 18, 16, 45, 0)); // 恰好提前 5 分钟
+        _engine.Poll(occs, _tasks, preAlertMinutes: 5);
+        Assert.Single(alerts);
+    }
+
+    [Fact]
+    public void 提前提醒_稍后提醒的实例不预告()
+    {
+        var o = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
+        o.TriggerAt = new DateTime(2026, 9, 18, 17, 0, 0); // snooze 后偏离原计划
+        var occs = new List<Occurrence> { o };
+        var alerts = new List<Occurrence>();
+        _engine.PreAlertsDue += list => alerts.AddRange(list);
+
+        _clock.Set(new DateTime(2026, 9, 18, 16, 56, 0));
+        _engine.Poll(occs, _tasks, preAlertMinutes: 10);
+
+        Assert.Empty(alerts);
+        Assert.Null(o.PreAlertShownAt);
+    }
+
+    [Fact]
+    public void 提前提醒_停用任务不预告()
+    {
+        _tasks[0].Enabled = false;
+        var o = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
+        var occs = new List<Occurrence> { o };
+        var alerts = new List<Occurrence>();
+        _engine.PreAlertsDue += list => alerts.AddRange(list);
+
+        _clock.Set(new DateTime(2026, 9, 18, 16, 48, 0));
+        _engine.Poll(occs, _tasks, preAlertMinutes: 5);
+
+        Assert.Empty(alerts);
+    }
+
+    [Fact]
+    public void 启动补扫提前提醒_只补发一次()
+    {
+        var o = MakePending(new DateTime(2026, 9, 18, 16, 50, 0));
+        var occs = new List<Occurrence> { o };
+        var alerts = new List<Occurrence>();
+        _engine.PreAlertsDue += list => alerts.AddRange(list);
+
+        _clock.Set(new DateTime(2026, 9, 18, 16, 46, 0));
+        _engine.ScanPreAlerts(occs, _tasks, _clock.Now, preAlertMinutes: 5);
+        Assert.Single(alerts);
+
+        _engine.ScanPreAlerts(occs, _tasks, _clock.Now, preAlertMinutes: 5);
+        Assert.Single(alerts);
     }
 }

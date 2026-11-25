@@ -5,5 +5,6 @@ public enum RecurrenceType
     Once,
     Daily,
     Weekly,
-    Monthly
+    Monthly,
+    Yearly
 }

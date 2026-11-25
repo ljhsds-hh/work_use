@@ -5,132 +5,199 @@
         WindowStyle="None" ResizeMode="NoResize"
         WindowState="Maximized"
         Topmost="True" ShowInTaskbar="False" ShowActivated="True"
-        Background="#101018"
-        Foreground="#0F172A"
-        FontFamily="Microsoft YaHei UI, Segoe UI"
+        Background="{DynamicResource BOverlayBase}"
+        Foreground="{DynamicResource BInk}"
+        FontFamily="{StaticResource FontBody}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
         KeyDown="OnKeyDown">
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="0" ResizeBorderThickness="0" GlassFrameThickness="1"
                       CornerRadius="0" UseAeroCaptionButtons="False" />
     </WindowChrome.WindowChrome>
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
 
-    <!-- 全屏遮罩：自定义背景图（可模糊）或深色底 + 可调暗化层 + 居中提醒卡片 -->
     <Grid>
         <Image x:Name="BackdropImage" Stretch="UniformToFill" Visibility="Collapsed" />
+        <Border x:Name="DimLayer" Background="{DynamicResource BOverlayBase}" />
 
-        <Border x:Name="DimLayer" Background="#101018" />
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                      VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                      Padding="0,28" Focusable="False">
+            <Grid Margin="24">
+                <Grid.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="ScaleTransform" ScaleX="0.985" ScaleY="0.985" />
+                        <TranslateTransform x:Name="FloatTransform" Y="18" />
+                    </TransformGroup>
+                </Grid.RenderTransform>
 
-        <Grid VerticalAlignment="Center" HorizontalAlignment="Center" RenderTransformOrigin="0.5,0.5">
-            <Grid.RenderTransform>
-                <TranslateTransform x:Name="FloatTransform" Y="16" />
-            </Grid.RenderTransform>
+                <Border Background="{DynamicResource BSurface}" CornerRadius="20" Width="620"
+                        VerticalAlignment="Center" HorizontalAlignment="Center"
+                        BorderBrush="{DynamicResource BHairline}" BorderThickness="1">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="56" ShadowDepth="18" Direction="270"
+                                          Opacity="0.42" Color="#000000" />
+                    </Border.Effect>
+                    <Grid>
+                        <StackPanel>
+                            <!-- 预览提示条 -->
+                            <Border Background="{DynamicResource BAmberSoft}" BorderBrush="{DynamicResource BWarningLine}"
+                                    BorderThickness="0,0,0,1" Padding="20,10"
+                                    CornerRadius="19,19,0,0"
+                                    Visibility="{Binding IsPreview, Converter={StaticResource BoolToVis}}">
+                                <DockPanel LastChildFill="False">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE7BA;" FontFamily="{StaticResource FontIcon}" FontSize="12"
+                                                   Foreground="{DynamicResource BAmber}" VerticalAlignment="Center" />
+                                        <TextBlock Text="预览模式 · 不会写入任何数据" FontSize="11.5" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource BAmber}" Margin="7,0,0,0"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <Button DockPanel.Dock="Right" Content="关闭预览" Click="OnClosePreview"
+                                            Style="{StaticResource GhostButton}" Height="27" Padding="9,0"
+                                            FontSize="11" Foreground="{DynamicResource BAmberHover}" />
+                                </DockPanel>
+                            </Border>
 
-            <!-- 卡片（左品牌状态条 + 内容），自绘圆角与阴影 -->
-            <Border Background="White" CornerRadius="10" Width="520"
-                    BorderBrush="#E2E8F0" BorderThickness="1">
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="36" ShadowDepth="10" Direction="270"
-                                      Opacity="0.35" Color="#0F172A" />
-                </Border.Effect>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="5" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+                            <!-- 头部 -->
+                            <DockPanel Margin="22,18,22,0" LastChildFill="False">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Width="30" Height="30" Background="{DynamicResource BAccent}" CornerRadius="9">
+                                        <TextBlock Text="Q" FontFamily="{StaticResource FontDisplay}" FontSize="14"
+                                                   FontWeight="Bold" Foreground="{DynamicResource BOnAccent}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel VerticalAlignment="Center" Margin="10,0,0,0">
+                                        <TextBlock Text="QuietRemind" FontSize="12.5" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource BInkSoft}" />
+                                        <TextBlock Text="到期提醒" FontSize="10.5" Foreground="{DynamicResource BFaint}" />
+                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                    <TextBlock Text="计划时刻" Style="{StaticResource OverlineText}"
+                                               HorizontalAlignment="Right" />
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <TextBlock Text="&#xE823;" FontFamily="{StaticResource FontIcon}" FontSize="12"
+                                                   Foreground="{DynamicResource BAmber}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding HeaderTime}" FontFamily="{StaticResource FontNumeric}"
+                                                   FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource BInk}"
+                                                   Margin="6,0,0,0" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </DockPanel>
 
-                    <Border Grid.Column="0" Background="#2563EB" />
-
-                    <StackPanel Grid.Column="1">
-                        <!-- 头部：品牌 + 计划时刻 -->
-                        <DockPanel Margin="14,12,16,0" LastChildFill="False">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Border Width="16" Height="16" Background="#2563EB" CornerRadius="4">
-                                    <TextBlock Text="Q" Foreground="White" FontSize="10" FontWeight="Bold"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                </Border>
-                                <TextBlock Text="QuietRemind · 到期提醒" FontSize="12" FontWeight="SemiBold"
-                                           Foreground="#64748B" VerticalAlignment="Center" Margin="8,0,0,0" />
-                            </StackPanel>
-                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Path Width="12" Height="12" Stretch="Uniform" Fill="#EF4444"
-                                      Data="M12,2 A10,10 0 1 0 22,12 A10,10 0 0 0 12,2 M12,4 A8,8 0 1 1 4,12 A8,8 0 0 1 12,4 M11,6 L13,6 L13,12 L16.5,14 L15.6,15.7 L11,13 Z" />
-                                <TextBlock Text="{Binding HeaderTime}" FontSize="12" Foreground="#94A3B8"
-                                           VerticalAlignment="Center" Margin="4,0,0,0" />
-                            </StackPanel>
-                        </DockPanel>
-
-                        <!-- 任务块列表 -->
-                        <ItemsControl ItemsSource="{Binding Items}" Margin="0,0,0,2">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Margin="20,12,20,18">
-                                        <!-- 任务标题 + 徽标 -->
-                                        <DockPanel LastChildFill="False" Margin="0,0,0,14">
-                                            <TextBlock Text="{Binding Content}" FontSize="17" FontWeight="Bold"
-                                                       Foreground="#0F172A" TextTrimming="CharacterEllipsis"
-                                                       ToolTip="{Binding Content}"
-                                                       VerticalAlignment="Center" DockPanel.Dock="Left" MaxWidth="380" />
-                                            <TextBlock DockPanel.Dock="Right" Text="{Binding BadgeText}" FontSize="11"
-                                                       Foreground="#2563EB" Background="#EFF6FF" Padding="8,2"
-                                                       VerticalAlignment="Center" HorizontalAlignment="Right">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TagBadge}">
-                                                        <Setter Property="HorizontalAlignment" Value="Right" />
+                            <!-- 任务条目 -->
+                            <ItemsControl ItemsSource="{Binding Items}" Margin="0,6,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{DynamicResource BHairlineSoft}" BorderThickness="0,0,0,1"
+                                                Margin="22,0">
+                                            <StackPanel Margin="0,17,0,18">
+                                                <StackPanel.Style>
+                                                    <Style TargetType="StackPanel">
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsMissed}" Value="True">
-                                                                <Setter Property="FontWeight" Value="Bold" />
-                                                                <Setter Property="Foreground" Value="#EF4444" />
-                                                                <Setter Property="Background" Value="#FEF2F2" />
+                                                            <DataTrigger Binding="{Binding IsSettled}" Value="True">
+                                                                <Setter Property="Opacity" Value="0.4" />
+                                                                <Setter Property="IsEnabled" Value="False" />
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                        </DockPanel>
+                                                </StackPanel.Style>
 
-                                        <!-- 操作行：完成 / 稍后再提醒分段 / 跳过 -->
-                                        <DockPanel LastChildFill="False">
-                                            <Button Style="{StaticResource PrimaryButton}" Command="{Binding CompleteCommand}"
-                                                    DockPanel.Dock="Left" Padding="14,0">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Path Width="12" Height="12" Stretch="None" Stroke="White" StrokeThickness="3"
-                                                          Data="M1,7 L5,11 L12,1" />
-                                                    <TextBlock Text="完成" Margin="6,0,0,0" />
-                                                </StackPanel>
-                                            </Button>
+                                                <DockPanel LastChildFill="False" Margin="0,0,0,15">
+                                                    <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center" MaxWidth="410">
+                                                        <TextBlock Text="{Binding Content}" FontFamily="{StaticResource FontDisplay}"
+                                                                   FontSize="19" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource BInk}"
+                                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding Content}" />
+                                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0"
+                                                                    Visibility="{Binding IsMissed, Converter={StaticResource BoolToVis}}">
+                                                            <TextBlock Text="&#xE7BA;" FontFamily="{StaticResource FontIcon}" FontSize="10"
+                                                                       Foreground="{DynamicResource BDanger}" VerticalAlignment="Center" />
+                                                            <TextBlock Text="{Binding TimeText}" FontSize="10.5"
+                                                                       Foreground="{DynamicResource BDanger}" Margin="5,0,0,0" />
+                                                        </StackPanel>
+                                                    </StackPanel>
 
-                                            <Border DockPanel.Dock="Left" Style="{StaticResource ButtonGroupBorder}"
-                                                    Margin="10,0,0,0" SnapsToDevicePixels="True">
-                                                <ItemsControl ItemsSource="{Binding SnoozeOptions}">
-                                                    <ItemsControl.ItemsPanel>
-                                                        <ItemsPanelTemplate>
-                                                            <StackPanel Orientation="Horizontal" />
-                                                        </ItemsPanelTemplate>
-                                                    </ItemsControl.ItemsPanel>
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <Button Style="{StaticResource GroupSegmentButton}"
-                                                                    Content="{Binding Label}" Command="{Binding Command}" />
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                            </Border>
+                                                    <Grid Grid.Column="1" DockPanel.Dock="Right" ClipToBounds="True"
+                                                          VerticalAlignment="Center">
+                                                        <ContentControl Content="{Binding BadgeText}" HorizontalAlignment="Right">
+                                                            <ContentControl.Style>
+                                                                <Style TargetType="ContentControl" BasedOn="{StaticResource PillGreen}">
+                                                                    <Setter Property="HorizontalAlignment" Value="Right" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsMissed}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource BDanger}" />
+                                                                            <Setter Property="Background" Value="{DynamicResource BDangerSoft}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </ContentControl.Style>
+                                                        </ContentControl>
+                                                    </Grid>
+                                                </DockPanel>
 
-                                            <Button Style="{StaticResource GhostButton}" Command="{Binding SkipCommand}"
-                                                    Content="跳过" DockPanel.Dock="Right" />
-                                        </DockPanel>
+                                                <DockPanel LastChildFill="False"
+                                                           Visibility="{Binding ShowActions, Converter={StaticResource BoolToVis}}">
+                                                    <Button Style="{StaticResource PrimaryButton}" Command="{Binding CompleteCommand}"
+                                                            DockPanel.Dock="Left" Padding="15,0" Height="36">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <Path Width="11" Height="11" Stretch="None" Stroke="{DynamicResource BOnAccent}" StrokeThickness="2.4"
+                                                                  Data="M1,6 L4.5,9.5 L11,1" />
+                                                            <TextBlock Text="完成" Margin="6,0,0,0" />
+                                                        </StackPanel>
+                                                    </Button>
+
+                                                    <Border DockPanel.Dock="Left" Style="{StaticResource ButtonGroupBorder}"
+                                                            Margin="9,0,0,0" SnapsToDevicePixels="True">
+                                                        <ItemsControl ItemsSource="{Binding SnoozeOptions}">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate>
+                                                                    <StackPanel Orientation="Horizontal" />
+                                                                </ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Button Style="{StaticResource GroupSegmentButton}"
+                                                                            Content="{Binding Label}" Command="{Binding Command}" />
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </Border>
+
+                                                    <Button Style="{StaticResource GhostButton}" Command="{Binding SkipCommand}"
+                                                            Content="跳过" DockPanel.Dock="Right" Height="36" />
+                                                </DockPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- 底部提示 -->
+                            <Border BorderBrush="{DynamicResource BHairlineSoft}" BorderThickness="0,1,0,0"
+                                    Padding="22,12" Background="{DynamicResource BSurfaceAlt}" CornerRadius="0,0,19,19">
+                                <DockPanel LastChildFill="False">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE73E;" FontFamily="{StaticResource FontIcon}" FontSize="10"
+                                                   Foreground="{DynamicResource BFaint}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding FooterText}" FontSize="10.5"
+                                                   Foreground="{DynamicResource BFaint}" Margin="7,0,0,0" />
                                     </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <!-- 收尾提示 -->
-                        <TextBlock Text="请对每条任务做出处理（完成 / 稍后再提醒 / 跳过）"
-                                   FontSize="11" Foreground="#94A3B8" Margin="20,0,20,16" />
-                    </StackPanel>
-                </Grid>
-            </Border>
-        </Grid>
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Items.Count, StringFormat={}{0} 条}"
+                                               FontFamily="{StaticResource FontNumeric}" FontSize="10.5"
+                                               Foreground="{DynamicResource BFaint}" VerticalAlignment="Center" />
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </ScrollViewer>
     </Grid>
 
     <Window.Triggers>
@@ -139,13 +206,27 @@
                 <Storyboard>
                     <DoubleAnimation Storyboard.TargetName="FloatTransform"
                                      Storyboard.TargetProperty="Y"
-                                     From="16" To="0" Duration="0:0:0.3">
+                                     From="18" To="0" Duration="0:0:0.32">
+                        <DoubleAnimation.EasingFunction>
+                            <CubicEase EasingMode="EaseOut" />
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetName="ScaleTransform"
+                                     Storyboard.TargetProperty="ScaleX"
+                                     From="0.985" To="1" Duration="0:0:0.32">
+                        <DoubleAnimation.EasingFunction>
+                            <CubicEase EasingMode="EaseOut" />
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetName="ScaleTransform"
+                                     Storyboard.TargetProperty="ScaleY"
+                                     From="0.985" To="1" Duration="0:0:0.32">
                         <DoubleAnimation.EasingFunction>
                             <CubicEase EasingMode="EaseOut" />
                         </DoubleAnimation.EasingFunction>
                     </DoubleAnimation>
                     <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                     From="0" To="1" Duration="0:0:0.3">
+                                     From="0" To="1" Duration="0:0:0.28">
                         <DoubleAnimation.EasingFunction>
                             <CubicEase EasingMode="EaseOut" />
                         </DoubleAnimation.EasingFunction>

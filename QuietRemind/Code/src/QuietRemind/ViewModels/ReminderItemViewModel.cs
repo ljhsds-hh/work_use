@@ -18,23 +18,28 @@ public sealed class ReminderItemViewModel : ViewModelBase
     private readonly ReminderEngine _engine;
     private bool _isSettled;
 
-    public ReminderItemViewModel(ReminderTask task, Occurrence occurrence, ReminderEngine engine, int[] snoozeMinutes)
+    public ReminderItemViewModel(ReminderTask task, Occurrence occurrence, ReminderEngine engine,
+        int[] snoozeMinutes, bool isPreview = false)
     {
         _task = task;
         _engine = engine;
+        IsPreview = isPreview;
         Occurrence = occurrence;
         IsMissed = occurrence.State == OccurrenceState.Missed;
         Content = task.Content;
 
         CompleteCommand = new RelayCommand(() => Settle(SettleAction.Complete, 0));
         SkipCommand = new RelayCommand(() => Settle(SettleAction.Skip, 0));
-        SnoozeOptions = snoozeMinutes
+        SnoozeOptions = (snoozeMinutes ?? [5, 10, 30])
             .Select(m => new SnoozeOptionViewModel($"{m} 分钟", new RelayCommand(() => Settle(SettleAction.Snooze, m))))
             .ToList();
     }
 
     public Occurrence Occurrence { get; }
     public string Content { get; }
+    public bool IsPreview { get; }
+    /// <summary>预览模式只展示样式，隐藏收尾操作并禁止写入。</summary>
+    public bool ShowActions => !IsPreview;
     public string TimeText => Occurrence.OriginalTriggerAt.ToString("yyyy-MM-dd HH:mm");
     public bool IsMissed { get; }
     /// <summary>标题旁徽标：已错过（红）或循环规则（蓝）。</summary>
@@ -50,7 +55,7 @@ public sealed class ReminderItemViewModel : ViewModelBase
 
     private void Settle(SettleAction action, int minutes)
     {
-        if (_isSettled)
+        if (_isSettled || IsPreview)
         {
             return;
         }

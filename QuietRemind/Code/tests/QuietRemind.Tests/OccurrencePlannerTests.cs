@@ -64,8 +64,9 @@ public class OccurrencePlannerTests
     }
 
     [Fact]
-    public void 单次任务_指定日期在生成范围外_不生成()
+    public void 单次任务_超过7天horizon_仍立即生成()
     {
+        // 单次任务日期一旦设定就生成，避免长期未运行导致日期落入滚动窗口外而静默丢失
         var task = new ReminderTask
         {
             RecurrenceType = RecurrenceType.Once,
@@ -75,7 +76,8 @@ public class OccurrencePlannerTests
 
         var occs = new List<Occurrence>();
         _planner.EnsureUpTo(occs, [task]);
-        Assert.Empty(occs);
+        var occ = Assert.Single(occs);
+        Assert.Equal(new DateTime(2026, 12, 1, 9, 30, 0), occ.TriggerAt);
     }
 
     [Fact]
@@ -258,6 +260,49 @@ public class OccurrencePlannerTests
     }
 
     [Fact]
+    public void 停用任务_未收尾实例置为跳过_重新启用不补历史欠账()
+    {
+        var task = Daily();
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task]);
+        Assert.Equal(7, occs.Count);
+
+        // 停用：已生成未收尾实例全部收尾为跳过
+        task.Enabled = false;
+        var skipped = _planner.SettleUnfinishedForDisabledTasks(occs, [task]);
+        Assert.Equal(7, skipped);
+        Assert.All(occs, o => Assert.Equal(OccurrenceState.Skipped, o.State));
+        Assert.All(occs, o => Assert.NotNull(o.SettledAt));
+
+        // 停用十天后重新启用：只从新的一天开始生成，不产生“已错过”历史欠账
+        _clock.Advance(TimeSpan.FromDays(10));
+        task.Enabled = true;
+        _planner.EnsureUpTo(occs, [task]);
+
+        Assert.DoesNotContain(occs, o => o.State == OccurrenceState.Missed);
+        Assert.Equal(7, occs.Count(o => o.State == OccurrenceState.Pending));
+    }
+
+    [Fact]
+    public void 日期回拨_按上次计划日下限跳过历史日期()
+    {
+        var task = Daily();
+        var occs = new List<Occurrence>();
+
+        // 今天 9/18，规划下限 9/20（模拟日期回拨到 9/18，上次计划日为 9/20）
+        _planner.EnsureUpTo(occs, [task], notBefore: new DateOnly(2026, 9, 20));
+
+        Assert.Equal(5, occs.Count); // 9/20 ~ 9/24
+        Assert.All(occs, o => Assert.True(DateOnly.FromDateTime(o.TriggerAt) >= new DateOnly(2026, 9, 20)));
+        Assert.True(OccurrencePlanner.IsClockRolledBack(new DateOnly(2026, 9, 18), new DateOnly(2026, 9, 20)));
+        Assert.False(OccurrencePlanner.IsClockRolledBack(new DateOnly(2026, 9, 20), new DateOnly(2026, 9, 20)));
+        // 7 天内视为可信回拨（与规划窗口一致）；远超当前视为历史前跳残留，不应长期阻断规划
+        Assert.True(OccurrencePlanner.IsUsableRollbackGuard(new DateOnly(2026, 9, 18), new DateOnly(2026, 9, 20)));
+        Assert.False(OccurrencePlanner.IsUsableRollbackGuard(new DateOnly(2026, 9, 18), new DateOnly(2026, 9, 28)));
+        Assert.False(OccurrencePlanner.IsUsableRollbackGuard(new DateOnly(2026, 9, 18), new DateOnly(2027, 9, 18)));
+    }
+
+    [Fact]
     public void 删除任务_历史实例保留_引擎按任务缺失过滤()
     {
         // 需求 2.3.3 / 8.3：删除任务不清除历史实例记录，仅停止参与提醒
@@ -277,5 +322,185 @@ public class OccurrencePlannerTests
 
         Assert.Equal(7, occs.Count); // 实例全部保留
         Assert.Empty(due);           // 但不再触发提醒
+    }
+
+    [Fact]
+    public void 每2天_以开始日期为锚点生成()
+    {
+        var task = Daily();
+        task.StartDate = new DateOnly(2026, 9, 18);
+        task.Interval = 2;
+
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task]);
+
+        Assert.Equal(
+            new[] { "2026-09-18", "2026-09-20", "2026-09-22", "2026-09-24" },
+            occs.Select(o => o.TriggerAt.ToString("yyyy-MM-dd")).ToArray());
+    }
+
+    [Fact]
+    public void 每2周_仅在锚点周及每隔一周生成()
+    {
+        var task = new ReminderTask
+        {
+            Content = "双周例会",
+            RecurrenceType = RecurrenceType.Weekly,
+            WeekDays = [DayOfWeek.Friday],
+            Time = new TimeSpan(16, 50, 0),
+            StartDate = new DateOnly(2026, 9, 18), // 周五
+            Interval = 2,
+        };
+
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task], horizonDays: 30);
+
+        Assert.Equal(
+            new[] { "2026-09-18", "2026-10-02", "2026-10-16" },
+            occs.Select(o => o.TriggerAt.ToString("yyyy-MM-dd")).ToArray());
+    }
+
+    [Fact]
+    public void 每2个月_跨年按锚点月份生成()
+    {
+        _clock.Set(new DateTime(2026, 11, 24, 10, 0, 0));
+        var task = new ReminderTask
+        {
+            Content = "双月账单",
+            RecurrenceType = RecurrenceType.Monthly,
+            MonthDay = 30,
+            Time = new TimeSpan(12, 0, 0),
+            StartDate = new DateOnly(2026, 11, 1),
+            Interval = 2,
+        };
+
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task], horizonDays: 150);
+
+        Assert.Equal(
+            new[] { "2026-11-30", "2027-01-30", "2027-03-30" },
+            occs.Select(o => o.TriggerAt.ToString("yyyy-MM-dd")).ToArray());
+    }
+
+    [Fact]
+    public void 每年任务_不受7天窗口限制_立即生成下一次()
+    {
+        var task = new ReminderTask
+        {
+            Content = "年度体检",
+            RecurrenceType = RecurrenceType.Yearly,
+            Month = 12,
+            MonthDay = 1,
+            Time = new TimeSpan(9, 0, 0),
+        };
+
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task]);
+
+        var occurrence = Assert.Single(occs);
+        Assert.Equal(new DateTime(2026, 12, 1, 9, 0, 0), occurrence.TriggerAt);
+    }
+
+    [Fact]
+    public void 每年任务_今年日期已过则生成明年()
+    {
+        _clock.Set(new DateTime(2026, 12, 2, 10, 0, 0));
+        var task = new ReminderTask
+        {
+            RecurrenceType = RecurrenceType.Yearly,
+            Month = 1,
+            MonthDay = 1,
+            Time = new TimeSpan(9, 0, 0),
+        };
+
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task]);
+
+        Assert.Equal(new DateTime(2027, 1, 1, 9, 0, 0), Assert.Single(occs).TriggerAt);
+    }
+
+    [Fact]
+    public void 每年2月29_平年取2月28_闰年取2月29()
+    {
+        var task = new ReminderTask
+        {
+            RecurrenceType = RecurrenceType.Yearly,
+            Month = 2,
+            MonthDay = 29,
+            Time = new TimeSpan(9, 0, 0),
+        };
+
+        _clock.Set(new DateTime(2027, 2, 1, 10, 0, 0));
+        var flat = new List<Occurrence>();
+        _planner.EnsureUpTo(flat, [task]);
+        Assert.Equal(new DateTime(2027, 2, 28, 9, 0, 0), Assert.Single(flat).TriggerAt);
+
+        _clock.Set(new DateTime(2028, 2, 1, 10, 0, 0));
+        var leap = new List<Occurrence>();
+        _planner.EnsureUpTo(leap, [task]);
+        Assert.Equal(new DateTime(2028, 2, 29, 9, 0, 0), Assert.Single(leap).TriggerAt);
+    }
+
+    [Fact]
+    public void 结束日期_当天仍生成_之后不再生成()
+    {
+        var task = Daily();
+        task.EndDate = new DateOnly(2026, 9, 20);
+
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task]);
+
+        Assert.Equal(
+            new[] { "2026-09-18", "2026-09-19", "2026-09-20" },
+            occs.Select(o => o.TriggerAt.ToString("yyyy-MM-dd")).ToArray());
+    }
+
+    [Fact]
+    public void 每年任务_超过结束日期不生成()
+    {
+        var task = new ReminderTask
+        {
+            RecurrenceType = RecurrenceType.Yearly,
+            Month = 1,
+            MonthDay = 1,
+            Time = new TimeSpan(9, 0, 0),
+            EndDate = new DateOnly(2026, 12, 31),
+        };
+
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task]);
+
+        Assert.Empty(occs);
+    }
+
+    [Fact]
+    public void 缺少开始日期且间隔大于1_按默认间隔生成避免静默丢失()
+    {
+        // 脏数据兜底：没有锚点无法计算间隔，宁可每天提醒也不静默漏提醒
+        var task = Daily();
+        task.Interval = 3;
+
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task]);
+
+        Assert.Equal(7, occs.Count);
+    }
+
+    [Fact]
+    public void 单次任务_结束日期早于单次日期_不生成()
+    {
+        // 正常 UI 不会给单次任务写结束日期；此处兜底人工编辑 JSON 的脏数据
+        var task = new ReminderTask
+        {
+            RecurrenceType = RecurrenceType.Once,
+            SingleDate = new DateOnly(2026, 9, 24),
+            EndDate = new DateOnly(2026, 9, 20),
+            Time = new TimeSpan(9, 30, 0),
+        };
+
+        var occs = new List<Occurrence>();
+        _planner.EnsureUpTo(occs, [task]);
+
+        Assert.Empty(occs);
     }
 }

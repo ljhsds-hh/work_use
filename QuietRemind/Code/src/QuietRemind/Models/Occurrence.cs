@@ -12,5 +12,7 @@ public class Occurrence
     public OccurrenceState State { get; set; } = OccurrenceState.Pending;
     /// <summary>首次弹窗时刻（幂等标识）；稍后再提醒时清空。</summary>
     public DateTime? ReminderShownAt { get; set; }
+    /// <summary>提前提醒（托盘气泡）已发出的时刻；仅提醒一次，稍后提醒/编辑重建后不再补发。</summary>
+    public DateTime? PreAlertShownAt { get; set; }
     public DateTime? SettledAt { get; set; }
 }

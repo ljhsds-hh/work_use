@@ -72,20 +72,27 @@ public sealed class SingleInstance
     /// <summary>通知已有实例弹出主界面（由手动启动的重复实例调用）。</summary>
     public static void SignalShowMain(string nsFilePath)
     {
-        var preferred = ReadPreferredNamespace(nsFilePath);
-        var order = preferred == "Local"
-            ? new[] { @"Local\" + ShowMainEventSuffix, @"Global\" + ShowMainEventSuffix }
-            : new[] { @"Global\" + ShowMainEventSuffix, @"Local\" + ShowMainEventSuffix };
-        foreach (var name in order)
+        try
         {
-            if (EventWaitHandle.TryOpenExisting(name, out var handle))
+            var preferred = ReadPreferredNamespace(nsFilePath);
+            var order = preferred == "Local"
+                ? new[] { @"Local\" + ShowMainEventSuffix, @"Global\" + ShowMainEventSuffix }
+                : new[] { @"Global\" + ShowMainEventSuffix, @"Local\" + ShowMainEventSuffix };
+            foreach (var name in order)
             {
-                using (handle)
+                if (EventWaitHandle.TryOpenExisting(name, out var handle))
                 {
-                    handle.Set();
+                    using (handle)
+                    {
+                        handle.Set();
+                    }
+                    return;
                 }
-                return;
             }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // 信号发送失败只是无法唤起已有实例，新实例仍按单实例规则退出
         }
     }
 
@@ -112,8 +119,9 @@ public sealed class SingleInstance
         {
             return File.Exists(path) ? File.ReadAllText(path).Trim() : null;
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            // 协调文件不可读时按“无偏好”处理，继续用默认探测顺序，不阻断启动
             return null;
         }
     }
@@ -127,7 +135,7 @@ public sealed class SingleInstance
             Directory.CreateDirectory(Path.GetDirectoryName(_nsFilePath)!);
             File.WriteAllText(_nsFilePath, ns);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // 协调文件写入失败不影响本实例运行
         }

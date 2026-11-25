@@ -21,39 +21,23 @@ public sealed class TaskSchedulerGuard
         _log = log;
     }
 
-    public bool IsRegistered()
-    {
-        try
-        {
-            using var svc = new TaskService();
-            return svc.FindTask(TaskName) is not null;
-        }
-        catch (Exception ex)
-        {
-            _log.Error("查询计划任务失败", ex);
-            return false;
-        }
-    }
-
     public bool EnsureRegistered()
     {
         try
         {
             using var svc = new TaskService();
-            if (svc.FindTask(TaskName) is { } existing && SameAction(existing, _exePath))
+            if (svc.FindTask(TaskName) is { } existing && SameConfig(existing, _exePath))
             {
                 _log.Info("计划任务已注册且配置一致，跳过");
                 return true;
             }
 
-            DeleteIfExists(svc);
-
             // 优先完整配置（登录触发 + 守护触发）；环境拒绝 LogonTrigger 时降级为仅守护触发。
-            // SameAction 要求登录触发器存在：环境恢复后每次启动都会重试完整配置，不会永久停留降级态。
+            // 使用 CreateOrUpdate 原地覆盖，不再先删除：注册失败时旧任务仍保留，不会出现无守护窗口。
+            // SameConfig 要求登录触发器存在：环境恢复后每次启动都会重试完整配置，不会永久停留降级态。
             var td = BuildDefinition(svc, includeLogonTrigger: true);
             if (!TryRegister(svc, td))
             {
-                DeleteIfExists(svc);
                 td = BuildDefinition(svc, includeLogonTrigger: false);
                 if (!TryRegister(svc, td))
                 {
@@ -120,37 +104,105 @@ public sealed class TaskSchedulerGuard
         }
     }
 
-    public void Unregister()
+    public bool Unregister()
     {
         try
         {
             using var svc = new TaskService();
-            DeleteIfExists(svc);
+            // FindTask 在任务不存在时返回 null；GetTask 在部分版本会抛 FileNotFoundException
+            if (svc.FindTask(TaskName) is null)
+            {
+                return true;
+            }
+            svc.RootFolder.DeleteTask(TaskName);
             _log.Info("计划任务已注销");
+            return true;
         }
         catch (Exception ex)
         {
             _log.Error("计划任务注销失败", ex);
+            return false;
         }
     }
 
-    private static void DeleteIfExists(TaskService svc)
+    /// <summary>守护状态快照：仅诊断界面按需查询，不进入秒级轮询。</summary>
+    public sealed record GuardStatus(
+        bool TaskExists,
+        bool Enabled,
+        bool HasLogonTrigger,
+        bool HasGuardTrigger,
+        bool ActionMatches,
+        DateTime? LastRunTime,
+        int? LastTaskResult,
+        string Summary);
+
+    /// <summary>查询计划任务注册现状（只读，不修改任务）。</summary>
+    public GuardStatus GetStatus()
     {
-        if (svc.GetTask(TaskName) is not null)
+        try
         {
-            svc.RootFolder.DeleteTask(TaskName);
+            using var svc = new TaskService();
+            var task = svc.FindTask(TaskName);
+            if (task is null)
+            {
+                return new GuardStatus(false, false, false, false, false, null, null,
+                    "未注册（开机自启与进程守护未生效）");
+            }
+
+            var action = task.Definition.Actions.OfType<ExecAction>().FirstOrDefault();
+            var actionMatches = action is not null
+                && action.Arguments?.Contains(ScheduledArg, StringComparison.OrdinalIgnoreCase) == true
+                && string.Equals(action.Path?.Trim('"'), _exePath.Trim('"'), StringComparison.OrdinalIgnoreCase);
+            var hasLogon = task.Definition.Triggers.Any(t => t is LogonTrigger && t.Enabled);
+            var hasGuard = task.Definition.Triggers.OfType<TimeTrigger>()
+                .Any(t => t.Enabled && t.Repetition.Interval == TimeSpan.FromMinutes(5));
+
+            DateTime? lastRun = null;
+            int? lastResult = null;
+            try
+            {
+                lastRun = task.LastRunTime;
+                lastResult = task.LastTaskResult;
+            }
+            catch (Exception)
+            {
+                // 部分系统/权限组合不允许读取运行历史，不影响配置诊断
+            }
+
+            var summary = !task.Enabled
+                ? "已注册但任务被禁用，建议修复"
+                : !actionMatches
+                    ? "已注册但启动配置不一致，建议修复"
+                    : !hasGuard
+                        ? "已注册但缺少守护触发，建议修复"
+                        : !hasLogon
+                            ? "已注册（降级：仅每 5 分钟守护）"
+                            : "已注册且配置一致";
+
+            return new GuardStatus(true, task.Enabled, hasLogon, hasGuard, actionMatches,
+                lastRun, lastResult, summary);
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"查询计划任务状态失败：{ex.Message}");
+            return new GuardStatus(false, false, false, false, false, null, null,
+                $"状态查询失败：{ex.Message}");
         }
     }
 
-    private static bool SameAction(Microsoft.Win32.TaskScheduler.Task task, string exePath)
+    private static bool SameConfig(Microsoft.Win32.TaskScheduler.Task task, string exePath)
     {
-        // 完整配置校验：动作路径一致 + 登录触发器存在 + 守护触发器每 5 分钟重复。
-        // 降级任务（无登录触发器）不视为一致——下次启动会尝试重建完整配置，避免永久降级。
-        var action = task.Definition.Actions.FirstOrDefault(a => a is ExecAction) as ExecAction;
-        var hasLogonTrigger = task.Definition.Triggers.Any(t => t is LogonTrigger);
+        // 完整配置校验：动作路径/参数一致 + 任务启用 + 登录触发器存在 + 守护触发器每 5 分钟重复。
+        // 降级任务（无登录触发器）或外部被改动（缺 --scheduled、被禁用）不视为一致，下次启动会重建。
+        var action = task.Definition.Actions.OfType<ExecAction>().FirstOrDefault();
+        var hasScheduledArg = action?.Arguments is { } args
+            && args.Contains(ScheduledArg, StringComparison.OrdinalIgnoreCase);
+        var hasLogonTrigger = task.Definition.Triggers.Any(t => t is LogonTrigger && t.Enabled);
         var guardTrigger = task.Definition.Triggers.OfType<TimeTrigger>()
-            .Any(t => t.Repetition.Interval == TimeSpan.FromMinutes(5));
+            .Any(t => t.Enabled && t.Repetition.Interval == TimeSpan.FromMinutes(5));
         return action is not null
+            && hasScheduledArg
+            && task.Enabled
             && hasLogonTrigger
             && guardTrigger
             && string.Equals(action.Path?.Trim('"'), exePath.Trim('"'), StringComparison.OrdinalIgnoreCase);

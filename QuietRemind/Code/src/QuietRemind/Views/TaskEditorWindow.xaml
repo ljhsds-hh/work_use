@@ -4,14 +4,17 @@
         xmlns:hc="https://handyorg.github.io/handycontrol"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="{Binding TitleText}"
-        Width="460" SizeToContent="Height"
+        Width="600" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize" ShowInTaskbar="False"
-        WindowStyle="None" Background="White"
-        Foreground="#0F172A"
-        FontFamily="Microsoft YaHei UI, Segoe UI">
+        WindowStyle="None" Background="{DynamicResource BSurface}"
+        Foreground="{DynamicResource BInk}"
+        FontFamily="{StaticResource FontBody}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
     <shell:WindowChrome.WindowChrome>
-        <shell:WindowChrome CaptionHeight="40" ResizeBorderThickness="0" GlassFrameThickness="1"
+        <shell:WindowChrome CaptionHeight="52" ResizeBorderThickness="0" GlassFrameThickness="1"
                             CornerRadius="0" UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
     <Window.Resources>
@@ -20,95 +23,317 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="40" />
+            <RowDefinition Height="52" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- 标题栏 -->
-        <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+        <Border Background="{DynamicResource BSurface}" BorderBrush="{DynamicResource BHairline}"
+                BorderThickness="0,0,0,1">
             <DockPanel LastChildFill="False">
-                <TextBlock Text="{Binding TitleText}" FontSize="12" FontWeight="SemiBold"
-                           Foreground="#64748B" VerticalAlignment="Center" Margin="14,0,0,0" />
-                <Button DockPanel.Dock="Right" Style="{StaticResource CaptionCloseButton}" Height="40" Width="46"
-                        Click="OnCancel" ToolTip="取消">
-                    <TextBlock Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10" />
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
+                    <Border Width="22" Height="22" Background="{DynamicResource BAccentSoft}" CornerRadius="7">
+                        <TextBlock Text="&#xE70F;" FontFamily="{StaticResource FontIcon}" FontSize="11"
+                                   Foreground="{DynamicResource BAccent}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="{Binding TitleText}" FontSize="12.5" FontWeight="SemiBold"
+                               Foreground="{DynamicResource BInkSoft}" Margin="9,0,0,0" VerticalAlignment="Center" />
+                    <TextBlock Text="任务设置" FontSize="11" Foreground="{DynamicResource BFaint}"
+                               Margin="8,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource CaptionCloseButton}" Height="52" Width="48"
+                        WindowChrome.IsHitTestVisibleInChrome="True"
+                        AutomationProperties.Name="取消并关闭" Click="OnCancel" ToolTip="取消">
+                    <TextBlock Text="&#xE8BB;" FontFamily="{StaticResource FontIcon}" FontSize="10" />
                 </Button>
             </DockPanel>
         </Border>
 
-        <!-- 表单 -->
-        <StackPanel Grid.Row="1" Margin="24,20,24,24">
-            <TextBlock Text="任务内容" FontSize="12" FontWeight="SemiBold" Foreground="#64748B" Margin="0,0,0,6" />
-            <hc:TextBox Text="{Binding Content, UpdateSourceTrigger=PropertyChanged}" MaxLength="200" />
+        <!-- 表单（内容过长时滚动，底部操作区固定） -->
+        <ScrollViewer x:Name="EditorScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0" MaxHeight="560">
+            <StackPanel Margin="30,24,30,10">
+                <TextBlock Text="TASK DETAILS" Style="{StaticResource OverlineText}" />
+                <TextBlock Text="{Binding TitleText}" Style="{StaticResource DisplayTitle}" FontSize="26"
+                           Margin="0,5,0,0" />
+                <TextBlock Text="设置提醒内容、循环规则与触发时刻，保存后立即生效" Style="{StaticResource BodyMuted}"
+                           Margin="0,6,0,0" />
 
-            <TextBlock Text="循环规则" FontSize="12" FontWeight="SemiBold" Foreground="#64748B" Margin="0,16,0,6" />
-            <StackPanel Orientation="Horizontal">
-                <RadioButton Content="单次" IsChecked="{Binding IsOnce, Mode=OneWay}" GroupName="Recurrence" Margin="0,0,14,0" Tag="Once" Checked="OnRecurrenceChecked" />
-                <RadioButton Content="每天" IsChecked="{Binding IsDaily, Mode=OneWay}" GroupName="Recurrence" Margin="0,0,14,0" Tag="Daily" Checked="OnRecurrenceChecked" />
-                <RadioButton Content="每周" IsChecked="{Binding IsWeekly, Mode=OneWay}" GroupName="Recurrence" Margin="0,0,14,0" Tag="Weekly" Checked="OnRecurrenceChecked" />
-                <RadioButton Content="每月" IsChecked="{Binding IsMonthly, Mode=OneWay}" GroupName="Recurrence" Tag="Monthly" Checked="OnRecurrenceChecked" />
+                <!-- 基本信息 -->
+                <Grid Margin="0,24,0,9">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="基本信息" Style="{StaticResource SectionLabel}" />
+                    <Border Grid.Column="1" Style="{StaticResource SectionRule}" />
+                </Grid>
+
+                <TextBlock Text="任务内容" Style="{StaticResource FieldLabel}" />
+                <Grid>
+                    <hc:TextBox Style="{StaticResource FieldTextBox}" Height="44" FontSize="14"
+                                Text="{Binding Content, UpdateSourceTrigger=PropertyChanged}" MaxLength="200" />
+                    <TextBlock Text="例如：17:30 提交周报" IsHitTestVisible="False" FontSize="13"
+                               Foreground="{DynamicResource BFaint}" Margin="13,0,0,0" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Content}" Value="">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+
+                <Grid Margin="0,18,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1*" />
+                        <ColumnDefinition Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="提醒时刻" Style="{StaticResource FieldLabel}" />
+                        <Grid Width="180" HorizontalAlignment="Left">
+                            <hc:TimePicker x:Name="TimePicker" Style="{StaticResource FieldTimePicker}"
+                                           SelectedTime="{Binding SelectedTime, Mode=TwoWay}" TimeFormat="HH:mm" />
+                            <TextBlock Text="选择时刻" IsHitTestVisible="False" FontSize="12"
+                                       Foreground="{DynamicResource BFaint}" Margin="12,0,34,0"
+                                       VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SelectedTime, ElementName=TimePicker}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Bottom">
+                        <TextBlock Text="时刻精确到分钟" Style="{StaticResource FieldHint}" />
+                        <TextBlock Text="全屏提醒会在该时刻弹出" Style="{StaticResource FieldHint}" Margin="0,3,0,0" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- 循环规则 -->
+                <Grid Margin="0,22,0,9">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="重复规则" Style="{StaticResource SectionLabel}" />
+                    <Border Grid.Column="1" Style="{StaticResource SectionRule}" />
+                </Grid>
+
+                <Border Background="{DynamicResource BSegmentTrack}" CornerRadius="11" Padding="3">
+                    <UniformGrid Columns="5">
+                        <RadioButton x:Name="OnceRadio" Content="单次" Style="{StaticResource SegmentRadio}" Tag="Once" Checked="OnRecurrenceChecked" />
+                        <RadioButton x:Name="DailyRadio" Content="每天" Style="{StaticResource SegmentRadio}" Tag="Daily" Checked="OnRecurrenceChecked" />
+                        <RadioButton x:Name="WeeklyRadio" Content="每周" Style="{StaticResource SegmentRadio}" Tag="Weekly" Checked="OnRecurrenceChecked" />
+                        <RadioButton x:Name="MonthlyRadio" Content="每月" Style="{StaticResource SegmentRadio}" Tag="Monthly" Checked="OnRecurrenceChecked" />
+                        <RadioButton x:Name="YearlyRadio" Content="每年" Style="{StaticResource SegmentRadio}" Tag="Yearly" Checked="OnRecurrenceChecked" />
+                    </UniformGrid>
+                </Border>
+
+                <!-- 规则详情容器：避免动态字段散落在页面上 -->
+                <Border Background="{DynamicResource BSurfaceAlt}" BorderBrush="{DynamicResource BHairlineSoft}"
+                        BorderThickness="1" CornerRadius="14" Padding="16,14" Margin="0,14,0,0">
+                    <StackPanel>
+                        <!-- 每天 -->
+                        <StackPanel Visibility="{Binding IsDaily, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE823;" FontFamily="{StaticResource FontIcon}" FontSize="12"
+                                           Foreground="{DynamicResource BAccent}" VerticalAlignment="Center" />
+                                <TextBlock Text="每天在所选时刻提醒一次" FontSize="12.5" Foreground="{DynamicResource BInkSoft}"
+                                           Margin="8,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- 单次日期 -->
+                        <StackPanel Visibility="{Binding IsOnce, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="日期" Style="{StaticResource FieldLabel}" />
+                            <Grid Width="210" HorizontalAlignment="Left">
+                                <hc:DatePicker x:Name="SingleDatePicker" Style="{StaticResource FieldDatePicker}"
+                                               SelectedDate="{Binding SingleDate}" />
+                                <TextBlock Text="选择日期" IsHitTestVisible="False" FontSize="12"
+                                           Foreground="{DynamicResource BFaint}" Margin="12,0,34,0"
+                                           VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedDate, ElementName=SingleDatePicker}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                            <TextBlock Text="单次任务只在指定日期的所选时刻提醒一次" Style="{StaticResource FieldHint}" Margin="0,6,0,0" />
+                        </StackPanel>
+
+                        <!-- 循环起止 -->
+                        <StackPanel Margin="0,14,0,0" Visibility="{Binding IsRecurring, Converter={StaticResource BoolToVis}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1*" />
+                                    <ColumnDefinition Width="16" />
+                                    <ColumnDefinition Width="1*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="开始日期" Style="{StaticResource FieldLabel}" />
+                                    <Grid>
+                                        <hc:DatePicker x:Name="StartDatePicker" Style="{StaticResource FieldDatePicker}"
+                                                       SelectedDate="{Binding StartDate}" />
+                                        <TextBlock Text="默认今天" IsHitTestVisible="False" FontSize="12"
+                                                   Foreground="{DynamicResource BFaint}" Margin="12,0,34,0"
+                                                   VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding SelectedDate, ElementName=StartDatePicker}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="结束日期（可选）" Style="{StaticResource FieldLabel}" />
+                                    <Grid>
+                                        <hc:DatePicker x:Name="EndDatePicker" Style="{StaticResource FieldDatePicker}"
+                                                       SelectedDate="{Binding EndDate}" />
+                                        <TextBlock Text="长期有效" IsHitTestVisible="False" FontSize="12"
+                                                   Foreground="{DynamicResource BFaint}" Margin="12,0,34,0"
+                                                   VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding SelectedDate, ElementName=EndDatePicker}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Text="结束日期含当天；重复间隔大于 1 时，开始日期作为间隔锚点"
+                                       Style="{StaticResource FieldHint}" Margin="0,6,0,0" />
+                        </StackPanel>
+
+                        <!-- 重复间隔 -->
+                        <StackPanel Margin="0,16,0,0" Visibility="{Binding IsIntervalVisible, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="重复间隔" Style="{StaticResource FieldLabel}" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="每" FontSize="12" Foreground="{DynamicResource BMuted}"
+                                           VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <hc:NumericUpDown Style="{StaticResource FieldNumeric}" Width="92"
+                                                  Value="{Binding Interval, Mode=TwoWay}" Minimum="1"
+                                                  Maximum="{Binding MaxInterval}" />
+                                <TextBlock Text="{Binding IntervalUnitText}" FontSize="12" Foreground="{DynamicResource BMuted}"
+                                           VerticalAlignment="Center" Margin="7,0,0,0" />
+                                <TextBlock Text="大于 1 时需设置开始日期" FontSize="10.5" Foreground="{DynamicResource BFaint}"
+                                           VerticalAlignment="Center" Margin="8,0,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- 每周 -->
+                        <StackPanel Margin="0,16,0,0" Visibility="{Binding IsWeekly, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="星期" Style="{StaticResource FieldLabel}" />
+                            <DockPanel LastChildFill="False">
+                                <StackPanel Orientation="Horizontal">
+                                    <ToggleButton Content="一" Style="{StaticResource DayChip}" IsChecked="{Binding Mon}" />
+                                    <ToggleButton Content="二" Style="{StaticResource DayChip}" IsChecked="{Binding Tue}" />
+                                    <ToggleButton Content="三" Style="{StaticResource DayChip}" IsChecked="{Binding Wed}" />
+                                    <ToggleButton Content="四" Style="{StaticResource DayChip}" IsChecked="{Binding Thu}" />
+                                    <ToggleButton Content="五" Style="{StaticResource DayChip}" IsChecked="{Binding Fri}" />
+                                    <ToggleButton Content="六" Style="{StaticResource DayChip}" IsChecked="{Binding Sat}" />
+                                    <ToggleButton Content="日" Style="{StaticResource DayChip}" IsChecked="{Binding Sun}" Margin="0" />
+                                </StackPanel>
+                                <Button DockPanel.Dock="Right" Content="工作日" Style="{StaticResource SecondaryButton}"
+                                        Height="30" Padding="10,0" FontSize="11.5" Click="OnWorkdays"
+                                        ToolTip="一键勾选周一至周五" VerticalAlignment="Center" />
+                            </DockPanel>
+                        </StackPanel>
+
+                        <!-- 每月 -->
+                        <StackPanel Margin="0,16,0,0" Visibility="{Binding IsMonthly, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="每月日期" Style="{StaticResource FieldLabel}" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="每月" FontSize="12" Foreground="{DynamicResource BMuted}"
+                                           VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <hc:NumericUpDown Style="{StaticResource FieldNumeric}" Width="84"
+                                                  Value="{Binding MonthDay, Mode=TwoWay}" Minimum="1" Maximum="31" />
+                                <TextBlock Text="日提醒" FontSize="12" Foreground="{DynamicResource BMuted}"
+                                           VerticalAlignment="Center" Margin="7,0,0,0" />
+                            </StackPanel>
+                            <TextBlock Text="当月无该日时自动取月末" Style="{StaticResource FieldHint}" Margin="0,6,0,0" />
+                        </StackPanel>
+
+                        <!-- 每年 -->
+                        <StackPanel Margin="0,16,0,0" Visibility="{Binding IsYearly, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="每年日期" Style="{StaticResource FieldLabel}" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="每年" FontSize="12" Foreground="{DynamicResource BMuted}"
+                                           VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <hc:NumericUpDown Style="{StaticResource FieldNumeric}" Width="76"
+                                                  Value="{Binding Month, Mode=TwoWay}" Minimum="1" Maximum="12" />
+                                <TextBlock Text="月" FontSize="12" Foreground="{DynamicResource BMuted}"
+                                           VerticalAlignment="Center" Margin="6,0,8,0" />
+                                <hc:NumericUpDown Style="{StaticResource FieldNumeric}" Width="76"
+                                                  Value="{Binding MonthDay, Mode=TwoWay}" Minimum="1" Maximum="31" />
+                                <TextBlock Text="日提醒" FontSize="12" Foreground="{DynamicResource BMuted}"
+                                           VerticalAlignment="Center" Margin="6,0,0,0" />
+                            </StackPanel>
+                            <TextBlock Text="当月无该日时取月末（如 2 月 29 日在平年取 2 月 28 日）"
+                                       Style="{StaticResource FieldHint}" Margin="0,6,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- 校验错误 -->
+                <Border Style="{StaticResource ErrorBanner}" Margin="0,16,0,0"
+                        Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="&#xE7BA;" FontFamily="{StaticResource FontIcon}" FontSize="13"
+                                   Foreground="{DynamicResource BDanger}" VerticalAlignment="Top" Margin="0,1,0,0" />
+                        <TextBlock Grid.Column="1" Text="{Binding ErrorText}" Foreground="{DynamicResource BDanger}"
+                                   FontSize="11.5" TextWrapping="Wrap" Margin="8,0,0,0" />
+                    </Grid>
+                </Border>
             </StackPanel>
+        </ScrollViewer>
 
-            <StackPanel Orientation="Horizontal" Margin="0,16,0,0" Visibility="{Binding IsOnce, Converter={StaticResource BoolToVis}}">
-                <StackPanel Width="150" Margin="0,0,24,0">
-                    <TextBlock Text="日期" FontSize="12" FontWeight="SemiBold" Foreground="#64748B" Margin="0,0,0,6" />
-                    <hc:DatePicker SelectedDate="{Binding SingleDate}" />
+        <!-- 底部操作区 -->
+        <Border Grid.Row="2" Background="{DynamicResource BSurfaceAlt}"
+                BorderBrush="{DynamicResource BHairline}" BorderThickness="0,1,0,0" Padding="30,14">
+            <DockPanel LastChildFill="False">
+                <TextBlock Text="保存后立即生效，已收尾历史不受影响" FontSize="10.5"
+                           Foreground="{DynamicResource BFaint}" VerticalAlignment="Center" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="取消" Width="88" Height="36" Style="{StaticResource SecondaryButton}"
+                            Click="OnCancel" />
+                    <Button Content="保存任务" Width="112" Height="36" Style="{StaticResource PrimaryButton}"
+                            Margin="10,0,0,0" Click="OnSave" />
                 </StackPanel>
-            </StackPanel>
-
-            <StackPanel Margin="0,16,0,0" Visibility="{Binding IsRecurring, Converter={StaticResource BoolToVis}}">
-                <TextBlock Text="开始日期" FontSize="12" FontWeight="SemiBold" Foreground="#64748B" Margin="0,0,0,2" />
-                <TextBlock Text="任务从该日开始提醒，留空默认从今天开始" FontSize="11" Foreground="#94A3B8" Margin="0,0,0,6" />
-                <hc:DatePicker SelectedDate="{Binding StartDate}" Width="180" HorizontalAlignment="Left" />
-            </StackPanel>
-
-            <StackPanel Orientation="Horizontal" Margin="0,16,0,0" Visibility="{Binding IsWeekly, Converter={StaticResource BoolToVis}}">
-                <TextBlock Text="星期" FontSize="12" FontWeight="SemiBold" Foreground="#64748B" Margin="0,6,8,0" />
-                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                    <CheckBox Content="一" IsChecked="{Binding Mon}" Margin="0,0,8,0" />
-                    <CheckBox Content="二" IsChecked="{Binding Tue}" Margin="0,0,8,0" />
-                    <CheckBox Content="三" IsChecked="{Binding Wed}" Margin="0,0,8,0" />
-                    <CheckBox Content="四" IsChecked="{Binding Thu}" Margin="0,0,8,0" />
-                    <CheckBox Content="五" IsChecked="{Binding Fri}" Margin="0,0,8,0" />
-                    <CheckBox Content="六" IsChecked="{Binding Sat}" Margin="0,0,8,0" />
-                    <CheckBox Content="日" IsChecked="{Binding Sun}" />
-                </StackPanel>
-            </StackPanel>
-
-            <StackPanel Orientation="Horizontal" Margin="0,16,0,0" Visibility="{Binding IsMonthly, Converter={StaticResource BoolToVis}}">
-                <TextBlock Text="每月" FontSize="12" FontWeight="SemiBold" Foreground="#64748B" Margin="0,6,8,0" />
-                <hc:NumericUpDown Value="{Binding MonthDay, Mode=TwoWay}" Minimum="1" Maximum="31" Width="72" />
-                <TextBlock Text="日提醒" FontSize="12" Foreground="#64748B" Margin="8,6,0,0" />
-            </StackPanel>
-
-            <TextBlock Text="提醒时刻" FontSize="12" FontWeight="SemiBold" Foreground="#64748B" Margin="0,16,0,6" />
-            <hc:TimePicker SelectedTime="{Binding SelectedTime, Mode=TwoWay}" Width="160" HorizontalAlignment="Left" />
-
-            <TextBlock Text="{Binding ErrorText}" Foreground="#EF4444" TextWrapping="Wrap"
-                       FontSize="12" Margin="0,12,0,0" Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}" />
-
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
-                <Button Content="取消" Width="92" Height="34" Click="OnCancel" Cursor="Hand"
-                        Background="White" Foreground="#64748B" BorderBrush="#E2E8F0" BorderThickness="1">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="Root" Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="6">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Root" Property="Background" Value="#F1F5F9" />
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-                <Button Content="保存" Width="92" Height="34" Style="{StaticResource PrimaryButton}"
-                        Margin="12,0,0,0" Click="OnSave" Cursor="Hand" />
-            </StackPanel>
-        </StackPanel>
+            </DockPanel>
+        </Border>
     </Grid>
 </Window>

@@ -54,7 +54,12 @@ public class JsonStoreTests : IDisposable
 
         _store.SaveTasks([task]);
         _store.SaveOccurrences([occ]);
-        _store.SaveSettings(new AppSettings { GuardEnabled = false, SnoozeMinutes = [3, 7] });
+        _store.SaveSettings(new AppSettings
+        {
+            GuardEnabled = false,
+            SnoozeMinutes = [3, 7],
+            LastPlannedDate = new DateOnly(2026, 9, 18),
+        });
 
         var data = _store.Load().Data;
         var t = Assert.Single(data.Tasks);
@@ -67,6 +72,7 @@ public class JsonStoreTests : IDisposable
 
         Assert.False(data.Settings.GuardEnabled);
         Assert.Equal([3, 7], data.Settings.SnoozeMinutes);
+        Assert.Equal(new DateOnly(2026, 9, 18), data.Settings.LastPlannedDate);
     }
 
     [Fact]
@@ -75,8 +81,21 @@ public class JsonStoreTests : IDisposable
         Assert.False(_store.HasExitMarker());
         _store.WriteExitMarker();
         Assert.True(_store.HasExitMarker());
+        Assert.NotNull(_store.ReadExitMarkerTime());
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp")); // 原子写不残留临时文件
         _store.ClearExitMarker();
         Assert.False(_store.HasExitMarker());
+    }
+
+    [Fact]
+    public void 退出标记_记录登录会话标识()
+    {
+        _store.WriteExitMarker("000000000008D4CC");
+
+        var marker = _store.ReadExitMarker();
+        Assert.Equal("000000000008D4CC", marker.SessionId);
+        Assert.NotNull(marker.Time);
+        _store.ClearExitMarker();
     }
 
     [Fact]
@@ -117,19 +136,54 @@ public class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void 损坏文件_本次会话禁写_不覆盖磁盘现场()
+    public void 损坏文件_备份后允许重建_新写入生效()
     {
         const string corrupt = "{ 损坏 ]";
-        File.WriteAllText(Path.Combine(_dir, "occurrences.json"), corrupt);
-        _ = _store.Load();
+        var path = Path.Combine(_dir, "occurrences.json");
+        File.WriteAllText(path, corrupt);
+        var result = _store.Load();
 
-        // 后续保存 occurrences 被静默跳过：磁盘上仍是损坏现场（.corrupt 备份已生成），不被空数据覆盖
-        _store.SaveOccurrences([new Occurrence()]);
-        Assert.Equal(corrupt, File.ReadAllText(Path.Combine(_dir, "occurrences.json")));
+        // 损坏域记录问题并保留现场备份
+        Assert.Contains(result.Problems, p => p.Contains("occurrences.json"));
         Assert.NotEmpty(Directory.GetFiles(_dir, "occurrences.json.corrupt-*"));
-        // 其他文件不受禁写影响
-        _store.SaveTasks([new ReminderTask()]);
-        Assert.True(File.Exists(Path.Combine(_dir, "tasks.json")));
+        // 原文件已移走，本次会话可重建，避免“看似保存成功、重启全部丢失”
+        Assert.False(File.Exists(path));
+
+        _store.SaveOccurrences([new Occurrence()]);
+        Assert.True(File.Exists(path));
+        Assert.Single(_store.Load().Data.Occurrences);
+        Assert.NotEmpty(Directory.GetFiles(_dir, "occurrences.json.corrupt-*"));
+    }
+
+    [Fact]
+    public void 读取被占用_本次会话拒绝覆写()
+    {
+        var path = Path.Combine(_dir, "occurrences.json");
+        File.WriteAllText(path, "[]");
+
+        using var lockStream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var store = new JsonStore(_dir);
+        var result = store.Load();
+
+        Assert.Contains(result.Problems, p => p.Contains("occurrences.json"));
+        Assert.Throws<IOException>(() => store.SaveOccurrences([new Occurrence()]));
+    }
+
+    [Fact]
+    public void 读取失败_保留原文件不移走_本次会话禁写()
+    {
+        var path = Path.Combine(_dir, "occurrences.json");
+        File.WriteAllText(path, "[]");
+
+        // 允许删除但拒绝读取：模拟瞬时占用。读取失败不应把可能完好的文件移走并以空数据覆盖
+        using var lockStream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.Delete);
+        var store = new JsonStore(_dir);
+        var result = store.Load();
+
+        Assert.Contains(result.Problems, p => p.Contains("occurrences.json"));
+        Assert.True(File.Exists(path));
+        Assert.Empty(Directory.GetFiles(_dir, "occurrences.json.unreadable-*"));
+        Assert.Throws<IOException>(() => store.SaveOccurrences([new Occurrence()]));
     }
 
     [Fact]
