@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-accent="mist" data-theme="light" data-mode="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portmarks · 收藏夹迁移</title>
+<meta name="description" content="在本机的 Edge / Chrome 之间按原树结构复制收藏夹，只读源文件，写入前自动备份。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%234A6FA5'/%3E%3Cpath d='M8 5h8v14l-4-3-4 3z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="bg" id="bg" aria-hidden="true">
+  <div class="bg__image" id="bgImage"></div>
+  <div class="bg__scrim" id="bgScrimLayer"></div>
+</div>
+
+<div class="app">
+
+  <header class="head">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6.5 3.5h11a1 1 0 0 1 1 1v16l-6.5-4.2L5.5 20.5v-16a1 1 0 0 1 1-1Z"/>
+        </svg>
+      </span>
+      <span class="brand__text">
+        <span class="brand__name">Portmarks</span>
+        <span class="brand__sub">在两个浏览器之间原样搬收藏夹</span>
+      </span>
+    </div>
+
+    <div class="head__actions">
+      <button class="iconbtn" id="modeBtn" type="button" aria-label="切换显示模式" title="切换显示模式">
+        <svg class="i-sun" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>
+        </svg>
+        <svg class="i-moon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/>
+        </svg>
+      </button>
+      <button class="iconbtn" id="lookBtn" type="button" aria-label="外观设置" title="外观设置" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3a9 9 0 1 0 0 18c1.3 0 1.8-.9 1.8-1.8 0-1.4-1-1.6-1-2.7 0-.9.7-1.5 1.6-1.5H16a5 5 0 0 0 5-5c0-3.9-4-7-9-7Z"/>
+          <circle cx="8" cy="10" r="1.1" fill="currentColor" stroke="none"/>
+          <circle cx="12" cy="7.5" r="1.1" fill="currentColor" stroke="none"/>
+          <circle cx="16" cy="10" r="1.1" fill="currentColor" stroke="none"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="pair" aria-label="选择源与目标">
+
+      <article class="pick" id="pickSource">
+        <div class="pick__top">
+          <span class="pick__cap">源 · 从这里读</span>
+          <span class="tag" id="sourceTag" hidden></span>
+        </div>
+        <div class="pick__body">
+          <span class="avatar" id="sourceAvatar" aria-hidden="true">E</span>
+          <select id="source" class="pick__select" aria-label="源浏览器配置"></select>
+        </div>
+        <p class="pick__stat" id="sourceStat">—</p>
+      </article>
+
+      <div class="pair__mid" aria-hidden="true">
+        <span class="pair__line"></span>
+        <span class="pair__arrow">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 12h15M13 6l6 6-6 6"/>
+          </svg>
+        </span>
+        <span class="pair__line"></span>
+      </div>
+
+      <article class="pick" id="pickTarget">
+        <div class="pick__top">
+          <span class="pick__cap">目标 · 写到这里</span>
+          <span class="tag" id="targetTag" hidden></span>
+        </div>
+        <div class="pick__body">
+          <span class="avatar" id="targetAvatar" aria-hidden="true">C</span>
+          <select id="target" class="pick__select" aria-label="目标浏览器配置"></select>
+        </div>
+        <p class="pick__stat" id="targetStat">—</p>
+      </article>
+
+    </section>
+
+    <section class="diff" id="diff" aria-live="polite">
+      <p class="muted">正在读取配置…</p>
+    </section>
+
+    <div class="cta">
+      <p class="cta__hint" id="hint"></p>
+      <button class="btn btn--primary btn--lg" id="apply" type="button" disabled>开始复制</button>
+    </div>
+
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+
+    <section class="bridge" aria-label="跨机器搬运">
+      <div class="bridge__text">
+        <span class="bridge__title">跨机器搬运</span>
+        <span class="bridge__sub">导出成文件，换台电脑再导入</span>
+      </div>
+      <div class="bridge__actions">
+        <button class="btn btn--ghost btn--sm" id="exportBtn" type="button">导出源收藏夹</button>
+        <button class="btn btn--ghost btn--sm" id="importBtn" type="button">从文件导入</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>只在本机运行</span>
+    <span class="dot" aria-hidden="true"></span>
+    <span>只读源文件</span>
+    <span class="dot" aria-hidden="true"></span>
+    <span>写入前自动备份</span>
+  </footer>
+
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet__backdrop" data-close></div>
+  <aside class="sheet__panel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <header class="sheet__head">
+      <h2 id="sheetTitle">外观</h2>
+      <button class="iconbtn" type="button" data-close aria-label="关闭外观设置">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+          <path d="M6 6l12 12M18 6 6 18"/>
+        </svg>
+      </button>
+    </header>
+
+    <div class="sheet__body">
+
+      <section class="field">
+        <h3 class="field__label">主题色</h3>
+        <div class="swatches" id="swatches" role="group" aria-label="主题色"></div>
+      </section>
+
+      <section class="field">
+        <h3 class="field__label">显示模式</h3>
+        <div class="segmented" id="modeSeg" role="group" aria-label="显示模式">
+          <button type="button" data-mode="auto">跟随系统</button>
+          <button type="button" data-mode="light">浅色</button>
+          <button type="button" data-mode="dark">深色</button>
+        </div>
+      </section>
+
+      <section class="field">
+        <h3 class="field__label">背景图</h3>
+        <div class="row">
+          <label class="btn btn--ghost btn--sm">
+            选择图片
+            <input type="file" id="bgFile" accept="image/*" hidden>
+          </label>
+          <button class="btn btn--ghost btn--sm" type="button" id="bgClear" disabled>移除</button>
+        </div>
+        <div class="sliders" id="bgSliders" aria-disabled="true">
+          <label class="slider">
+            <span class="slider__k">不透明度</span>
+            <input type="range" id="bgOpacity" min="10" max="100" value="85">
+            <output class="slider__v" id="bgOpacityOut">85%</output>
+          </label>
+          <label class="slider">
+            <span class="slider__k">模糊</span>
+            <input type="range" id="bgBlur" min="0" max="24" value="8">
+            <output class="slider__v" id="bgBlurOut">8px</output>
+          </label>
+          <label class="slider">
+            <span class="slider__k">遮罩</span>
+            <input type="range" id="bgScrim" min="0" max="95" value="45">
+            <output class="slider__v" id="bgScrimOut">45%</output>
+          </label>
+        </div>
+        <p class="field__hint">遮罩越强，文字越清晰；图片会先压到 1600px 以内再保存，不占满浏览器存储。</p>
+      </section>
+
+      <button class="btn btn--ghost btn--sm" type="button" id="resetLook">恢复默认外观</button>
+
+    </div>
+  </aside>
+</div>
+
+<div class="sheet" id="importSheet" hidden>
+  <div class="sheet__backdrop" data-close></div>
+  <aside class="sheet__panel" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+    <header class="sheet__head">
+      <h2 id="importTitle">从文件导入</h2>
+      <button class="iconbtn" type="button" data-close aria-label="关闭导入面板">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+          <path d="M6 6l12 12M18 6 6 18"/>
+        </svg>
+      </button>
+    </header>
+
+    <div class="sheet__body">
+
+      <section class="field">
+        <h3 class="field__label">写入目标</h3>
+        <div class="importTarget" id="importTarget">—</div>
+      </section>
+
+      <section class="field">
+        <h3 class="field__label">导入文件</h3>
+        <div class="row">
+          <label class="btn btn--ghost btn--sm">
+            选择 .portmarks
+            <input type="file" id="importFile" accept=".portmarks,.json,application/json" hidden>
+          </label>
+        </div>
+        <p class="field__hint" id="importFileName">还没有选择文件</p>
+      </section>
+
+      <div id="importPreview" class="importPreview">
+        <p class="muted">选好文件会先算一次差异，确认后再写入。</p>
+      </div>
+
+      <button class="btn btn--primary" id="importApply" type="button" disabled>写入目标</button>
+
+    </div>
+  </aside>
+</div>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

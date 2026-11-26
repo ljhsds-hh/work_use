@@ -1,0 +1,71 @@
+{
+  "format": "portmarks",
+  "version": 1,
+  "createdAt": "2026-11-26T14:42:06.523Z",
+  "source": {
+    "browser": "edge",
+    "ua": "example"
+  },
+  "tree": [
+    {
+      "slot": "bar",
+      "title": "收藏夹栏",
+      "children": [
+        {
+          "type": "url",
+          "title": "MDN Web Docs",
+          "url": "https://developer.mozilla.org/zh-CN/"
+        },
+        {
+          "type": "folder",
+          "title": "技术",
+          "children": [
+            {
+              "type": "url",
+              "title": "Node.js 文档",
+              "url": "https://nodejs.org/docs/latest/api/"
+            },
+            {
+              "type": "url",
+              "title": "V8 Blog",
+              "url": "https://v8.dev/blog"
+            },
+            {
+              "type": "folder",
+              "title": "前端",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Can I use",
+                  "url": "https://caniuse.com/"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "folder",
+          "title": "空文件夹示例",
+          "children": []
+        }
+      ]
+    },
+    {
+      "slot": "other",
+      "title": "其他收藏夹",
+      "children": [
+        {
+          "type": "folder",
+          "title": "待读",
+          "children": [
+            {
+              "type": "url",
+              "title": "Chrome 扩展开发",
+              "url": "https://developer.chrome.com/docs/extensions/"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

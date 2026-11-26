@@ -1,0 +1,12 @@
+{
+  "name": "portmarks",
+  "version": "2.0.1",
+  "private": true,
+  "type": "module",
+  "description": "在本机的 Edge / Chrome 之间按原树结构复制收藏夹",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js",
+    "check": "node tools/realdata-check.js"
+  }
+}

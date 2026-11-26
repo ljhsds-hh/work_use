@@ -14,6 +14,7 @@
 | [CodeMemo 命令速查库](CodeMemo/README.md) | 分类收藏 PowerShell / Git 常用命令（内置 89 条含避坑备注），全局搜索、参数占位符标注、一键复制并记录使用次数 | C# / WPF / .NET 8 | [需求说明](CodeMemo/Docs/需求.md) |
 | [SpaceMaid C 盘空间管家](SpaceMaid/README.md) | 分级清理 C 盘空间：四档分级 + 全量隔离区（清理不等于删除，保留期内可还原）+ 清单人工审阅与复核报告，禁止清单硬约束、永久禁止项不进扫描 | C# / WPF / .NET 8 | [需求说明](SpaceMaid/Docs/需求.md) |
 | [Forge 代码锻造格式化工具](CodeFormatter/README.md) | 离线单文件 HTML 代码格式化 / 压缩器：九种语言（HTML / JS / CSS / XAML / XML / SQL / C# / Java / JSON）自动识别，双栏对照，深浅主题与自定义背景，代码不出浏览器 | 单文件 HTML / 原生 JavaScript | [需求说明](CodeFormatter/Docs/需求.md) |
+| [Portmarks 收藏夹迁移工具](Portmarks/README.md) | 在本机的 Edge / Chrome 之间按原树结构无损迁移收藏夹，差异即时预览，写入前自动备份，支持 .portmarks 文件跨机搬运 | Node.js 原生 ESM / 原生 Web 前端 | [使用说明](Portmarks/docs/使用说明.md) |
 
 ## 目录结构
 
